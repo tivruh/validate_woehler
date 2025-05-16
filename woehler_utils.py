@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from scipy import optimize
 import traceback
 
@@ -193,4 +194,193 @@ def plot_optimization_convergence(steps, method="optimization"):
     )
 
     fig.show()
+    return fig
+
+def create_comparison_plot(df_prepared, elementary_result, ml_result, huck_result, N_LCF=10000, NG=5000000, file_name=None):
+    """
+    Create an SN curve plot comparing Nelder-Mead and Huck's method
+    with highlighted staircase region
+    
+    Parameters:
+    -----------
+    df_prepared : DataFrame
+        Fatigue test data with 'load', 'cycles', 'censor', 'fracture' columns
+    elementary_result : Series
+        Elementary analysis result with ND value for identifying staircase region
+    ml_result : Series
+        MaxLikeInf (Nelder-Mead) analysis result
+    huck_result : Series
+        Huck's method analysis result
+    N_LCF : int
+        Pivot point in LCF
+    NG : int
+        Maximum number of cycles
+    file_name : str
+        Name of the file being analyzed for the title
+    """
+    # Create figure
+    fig = make_subplots()
+    
+    # Get the staircase region boundary (Elementary ND)
+    elementary_ND = elementary_result.ND
+    
+    # Separate points into different groups
+    slope_failures = df_prepared[(df_prepared['fracture']) & (df_prepared['cycles'] < elementary_ND)]
+    slope_survivors = df_prepared[(~df_prepared['fracture']) & (df_prepared['cycles'] < elementary_ND)]
+    staircase_failures = df_prepared[(df_prepared['fracture']) & (df_prepared['cycles'] >= elementary_ND)]
+    staircase_survivors = df_prepared[(~df_prepared['fracture']) & (df_prepared['cycles'] >= elementary_ND)]
+    
+    # Plot slope region points (standard blue)
+    if not slope_failures.empty:
+        fig.add_trace(go.Scatter(
+            x=slope_failures['cycles'], y=slope_failures['load'],
+            mode='markers', marker=dict(color='#648fff', symbol='cross', size=10),
+            name='Slope Region Failures',
+            hovertemplate='Cycles: %{x:.1f}<br>Load: %{y}<br>Status: Failure<extra></extra>'
+        ))
+    
+    if not slope_survivors.empty:
+        fig.add_trace(go.Scatter(
+            x=slope_survivors['cycles'], y=slope_survivors['load'],
+            mode='markers', marker=dict(color='#648fff', symbol='triangle-right', size=10),
+            name='Slope Region Survivors',
+            hovertemplate='Cycles: %{x:.1f}<br>Load: %{y}<br>Status: Survivor<extra></extra>'
+        ))
+    
+    # Plot staircase region points (red for highlighting)
+    if not staircase_failures.empty:
+        fig.add_trace(go.Scatter(
+            x=staircase_failures['cycles'], y=staircase_failures['load'],
+            mode='markers', marker=dict(color='#dc267f', symbol='cross', size=10),
+            name='Staircase Region Failures',
+            hovertemplate='Cycles: %{x:.1f}<br>Load: %{y}<br>Status: Failure<extra></extra>'
+        ))
+    
+    if not staircase_survivors.empty:
+        fig.add_trace(go.Scatter(
+            x=staircase_survivors['cycles'], y=staircase_survivors['load'],
+            mode='markers', marker=dict(color='#dc267f', symbol='triangle-right', size=10),
+            name='Staircase Region Survivors',
+            hovertemplate='Cycles: %{x:.1f}<br>Load: %{y}<br>Status: Survivor<extra></extra>'
+        ))
+    
+    # Plot Nelder-Mead curve
+    k_nm = ml_result.k_1
+    ND_nm = ml_result.ND
+    SD_nm = ml_result.SD
+    
+    # Calculate LCF starting point for Nelder-Mead
+    L_LCF_nm = 10**(np.log10(SD_nm)-(np.log10(ND_nm/N_LCF))/-k_nm)
+    
+    # Plot Nelder-Mead LCF curve
+    fig.add_trace(go.Scatter(
+        x=[N_LCF, ND_nm],
+        y=[L_LCF_nm, SD_nm],
+        mode='lines', line=dict(color='#648fff', width=2),
+        name='Nelder-Mead (LCF)'
+    ))
+    
+    # Plot Nelder-Mead HCF curve
+    fig.add_trace(go.Scatter(
+        x=[ND_nm, NG],
+        y=[SD_nm, SD_nm],
+        mode='lines', line=dict(color='#648fff', width=2, dash='dash'),
+        name='Nelder-Mead (HCF)'
+    ))
+    
+    # Plot Huck curve
+    k_huck = huck_result.k_1  # Same as Elementary/NM since not recalculated
+    ND_huck = huck_result.ND
+    SD_huck = huck_result.SD
+    
+    # Calculate LCF starting point for Huck
+    L_LCF_huck = 10**(np.log10(SD_huck)-(np.log10(ND_huck/N_LCF))/-k_huck)
+    
+    # Plot Huck LCF curve
+    fig.add_trace(go.Scatter(
+        x=[N_LCF, ND_huck],
+        y=[L_LCF_huck, SD_huck],
+        mode='lines', line=dict(color='#dc267f', width=2),
+        name='Huck (LCF)'
+    ))
+    
+    # Plot Huck HCF curve
+    fig.add_trace(go.Scatter(
+        x=[ND_huck, NG],
+        y=[SD_huck, SD_huck],
+        mode='lines', line=dict(color='#dc267f', width=2, dash='dash'),
+        name='Huck (HCF)'
+    ))
+    
+    # Add vertical line at Elementary ND to show staircase boundary
+    fig.add_vline(
+        x=elementary_ND,
+        line=dict(color='green', width=2, dash='dot'),
+        annotation_text="Staircase Boundary (ND)",
+        annotation_position="top right"
+    )
+    
+    # Add markers for both recalculated ND values
+    fig.add_trace(go.Scatter(
+        x=[ND_nm], 
+        y=[SD_nm * 0.9],  # Just below the line for visibility
+        mode='markers+text',
+        marker=dict(color='#648fff', size=12, symbol='triangle-down'),
+        text=["NM ND"],
+        textposition="bottom center",
+        name='Nelder-Mead ND',
+        showlegend=False
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=[ND_huck], 
+        y=[SD_huck * 0.9],  # Just below the line for visibility
+        mode='markers+text',
+        marker=dict(color='#dc267f', size=12, symbol='triangle-down'),
+        text=["Huck ND"],
+        textposition="bottom center",
+        name='Huck ND',
+        showlegend=False
+    ))
+    
+    # Calculate slog values
+    slog_nm = np.log10(ml_result.TS)/2.5361
+    slog_huck = np.log10(huck_result.TS)/2.5361
+    
+    # Create title with parameters - with smaller font size for subtitle
+    title_text = f"SN Curve Comparison"
+    if file_name:
+        title_text += f" - {file_name}"
+        
+    subtitle = (
+        f"<span style='font-size:10px; color:#648fff'>Nelder-Mead: k={k_nm:.2f}, ND={int(ND_nm):,}, Pü50={SD_nm:.1f}, slog={slog_nm:.3f}</span><br>"
+        f"<span style='font-size:10px; color:#dc267f'>Huck: k={k_huck:.2f}, ND={int(ND_huck):,}, Pü50={SD_huck:.1f}, slog={slog_huck:.3f}</span><br>"
+        f"<span style='font-size:10px; color:green'>Staircase region begins at ND={int(elementary_ND):,} cycles</span>"
+    )
+    
+    fig.update_layout(
+        title={
+            'text': title_text + "<br>" + subtitle,
+            'y': 0.95,  # Move title up to add more space
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top',
+            'font': {'size': 14}  # Slightly smaller main title
+        },
+        xaxis_type="log",
+        yaxis_type="log",
+        xaxis_title="Cycles",
+        yaxis_title="Load",
+        showlegend=True,
+        width=1000,
+        height=700,
+        margin=dict(t=100),  # Add more top margin for the title
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="right",
+            x=0.99
+        )
+    )
+
     return fig

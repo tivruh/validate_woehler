@@ -34,7 +34,7 @@ from woehler_utils import *
 
 # Sheet containing data must be named 'Data'
 
-file_path = "All Data/4PB_2.xlsx"
+file_path = "All Data/4PB_7.xlsx"
 
 N_LCF = 10000  # Pivot point in LCF
 NG = 5000000   # Maximum number of cycles
@@ -122,6 +122,10 @@ def analyze_with_huck(fatigue_data):
 def compare_methods(fatigue_data, ref_values=None, dataset_name="Unknown"):
     """Compare MaxLikeInf (Nelder-Mead), L-BFGS-B and Huck method results"""
     results_list = []  # Will store all results as rows
+    
+    elementary_analyzer = woehler.Elementary(fatigue_data)
+    elementary_result = elementary_analyzer.analyze()
+    print(f"Elementary ND (staircase boundary): {elementary_result.ND:.0f} cycles")
         
     # Run Nelder-Mead
     ml_analyzer = woehler.MaxLikeInf(fatigue_data)
@@ -136,7 +140,7 @@ def compare_methods(fatigue_data, ref_values=None, dataset_name="Unknown"):
         'TS': ml_result.TS,
         'slog': ml_slog,
         'ND': ml_result.ND,
-        'k': ml_result.k_1,
+        # 'k': ml_result.k_1,
         'Optimizer Message': 'Standard analysis',
         'Convergence Plot': 'N/A'
     }
@@ -175,7 +179,7 @@ def compare_methods(fatigue_data, ref_values=None, dataset_name="Unknown"):
             'TS': lbfgs_ts,
             'slog': lbfgs_slog,
             'ND': ml_result.ND,  # Same as Nelder-Mead
-            'k': ml_result.k_1,  # Same as Nelder-Mead
+            # 'k': ml_result.k_1,  # Same as Nelder-Mead
             'Optimizer Message': lbfgs_results['message'],
             'Convergence Plot': 'See plot in notebook'
         }
@@ -186,7 +190,7 @@ def compare_methods(fatigue_data, ref_values=None, dataset_name="Unknown"):
             'SD': lbfgs_sd,
             'TS': lbfgs_ts,
             'ND': ml_result.ND,
-            'k_1': ml_result.k_1
+            # 'k_1': ml_result.k_1
         })
     else:
         lbfgs_series = None    
@@ -204,7 +208,7 @@ def compare_methods(fatigue_data, ref_values=None, dataset_name="Unknown"):
         'TS': huck_result.TS,
         'slog': huck_slog,
         'ND': huck_result.ND,
-        'k': huck_result.k_1,
+        # 'k': huck_result.k_1,
         'Optimizer Message': 'SD from staircase region; ND and k from Elementary',
         'Convergence Plot': 'N/A'
     }
@@ -230,8 +234,19 @@ def compare_methods(fatigue_data, ref_values=None, dataset_name="Unknown"):
     
     # Display comparison table
     print("\nComparison of Methods:")
-    display_df = results_df[['Method', 'SD (Pü50)', 'TS', 'slog', 'ND', 'k']]
+    display_df = results_df[['Method', 'SD (Pü50)', 'TS', 'slog', 'ND']]
     print(display_df)
+    
+    # Create and display comparison plot
+    df_prepared = fatigue_data._obj
+    plot = create_comparison_plot(
+        df_prepared, 
+        elementary_result, 
+        ml_result, 
+        huck_result,
+        file_name=dataset_name
+    )
+    plot.show()
     
     # Return complete results DataFrame along with original objects
     return results_df, ml_result, lbfgs_series if not nm_reasonable else None, huck_result
@@ -320,6 +335,57 @@ save_comparison_to_excel(comparison_results)
 # - warnflag = 0: Optimization succeeded (converged properly)
 # - warnflag = 1: Maximum number of iterations reached without convergence
 # - warnflag = 2: Function evaluations not changing (possible precision loss)
+
+
+# %% Test PyLife's infinite zone definition
+
+# Load a test file and prepare data
+file_path = "All Data/4PB_2.xlsx"  # Change to a file that gives good results
+df_test, ref_values = analyze_fatigue_file(file_path)
+df_prepared = df_test[['load', 'cycles', 'censor']]
+df_prepared = woehler.determine_fractures(df_prepared, NG)
+fatigue_data = df_prepared.fatigue_data
+
+# Run Elementary analysis to get ND
+elementary_result = woehler.Elementary(fatigue_data).analyze()
+ND_value = elementary_result.ND
+
+print(f"Dataset: {os.path.basename(file_path)}")
+print(f"Transition (ND) cycles: {ND_value:.0f}")
+
+# Run MaxLikeInf analysis to compare
+maxlike_result = woehler.MaxLikeInf(fatigue_data).analyze()
+print(f"MaxLikeInf SD: {maxlike_result.SD:.2f}")
+print(f"MaxLikeInf ND: {maxlike_result.ND:.0f}")
+
+# Get points with cycles >= ND (staircase region)
+staircase_region = df_prepared[df_prepared['cycles'] >= ND_value]
+print(f"\nPoints in staircase region (cycles >= ND): {len(staircase_region)}")
+print("Load levels in staircase region:", sorted(staircase_region['load'].unique()))
+print("Number of failures:", sum(staircase_region['fracture']))
+print("Number of runouts:", sum(~staircase_region['fracture']))
+
+# Get points with cycles < ND (slope region)
+slope_region = df_prepared[df_prepared['cycles'] < ND_value]
+print(f"\nPoints in slope region (cycles < ND): {len(slope_region)}")
+print("Load levels in slope region:", sorted(slope_region['load'].unique()))
+print("Number of failures:", sum(slope_region['fracture']))
+print("Number of runouts:", sum(~slope_region['fracture']))
+
+# Calculate load range in staircase region
+if not staircase_region.empty:
+    staircase_min_load = staircase_region['load'].min()
+    staircase_max_load = staircase_region['load'].max()
+    print(f"\nStaircase region load range: {staircase_min_load:.2f} to {staircase_max_load:.2f}")
+    
+    # Count failures at each load level in staircase region
+    staircase_failures = staircase_region.groupby('load')['fracture'].sum()
+    print("\nFailures at each load level in staircase region:")
+    for load, failures in staircase_failures.items():
+        total = len(staircase_region[staircase_region['load'] == load])
+        runouts = total - failures
+        print(f"Load {load:.2f}: {failures} failures, {runouts} runouts")
+
 
 # %% Batch process all files in a directory with automatic runout detection
 def batch_compare_methods_in_directory(directory_path, default_ng=5000000):
