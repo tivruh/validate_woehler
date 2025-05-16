@@ -21,8 +21,18 @@ class HuckMethod(woehler.Elementary):
         """
         print("\n=== Huck's Method Analysis ===")
         
-        # Extract load levels and sort them
-        loads = sorted(self._fd.load.unique())
+        # Use only the infinite zone data (where staircase testing occurs)
+        infinite_zone = self._fd.infinite_zone
+        
+        print(f"Infinite zone data shape: {infinite_zone.shape}")
+        print(f"Number of runouts: {(~infinite_zone.fracture).sum()}")
+        print(f"Number of failures: {infinite_zone.fracture.sum()}")
+    
+        # Extract load levels within the infinite zone and sort them
+        loads = sorted(infinite_zone.load.unique())
+        
+        if len(loads) < 2:
+            raise ValueError("Fewer than 2 load levels in the infinite zone. Huck's method may not be appropriate.")
         
         # Identify the lowest load level to be included (L0)
         L0 = min(loads)
@@ -40,14 +50,15 @@ class HuckMethod(woehler.Elementary):
             d_log = 1.0
             print("Warning: Only one load level found, using d_log = 1.0")
         
-        # Group data and calculate fi, i·fi, i²·fi
+        # Group data and calculate fi, i·fi, i²·fi for the staircase sequence
         result_table = []
         for load in loads:
             i = load_to_i[load]
-            # Count failures at this load level
-            failures_at_load = self._fd.fractures[self._fd.fractures.load == load].shape[0]
+            # Count failures at this load level within the infinite zone
+            failures_at_load = infinite_zone[infinite_zone.load == load & infinite_zone.fracture].shape[0]
             
-            if failures_at_load > 0:  # Only include levels with failures
+            # Only include in calculation if there are failures at this level
+            if failures_at_load > 0:
                 result_table.append({
                     'i': i,
                     'Load': load,
@@ -60,6 +71,13 @@ class HuckMethod(woehler.Elementary):
         df_results = pd.DataFrame(result_table)
         print("\nStaircase Analysis Table:")
         print(df_results)
+        
+        # Check if we have valid staircase data
+        if len(df_results) == 0:
+            print("Warning: No valid staircase data found in the infinite zone.")
+            print("Using Elementary result for SD and default value for TS.")
+            # Keep the parameters from Elementary
+            return wc
         
         # Calculate characteristic numbers
         F_T = df_results['fi'].sum()         # Total of fi values
@@ -122,8 +140,11 @@ class HuckMethod(woehler.Elementary):
         
     def plot_staircase(self):
         """Create a visualization of the staircase data with results."""
-        # Get sorted load levels
-        loads = sorted(self._fd.load.unique())
+        # Get the infinite zone data
+        infinite_zone = self._fd.infinite_zone
+        
+        # Get sorted load levels from infinite zone
+        loads = sorted(infinite_zone.load.unique())
         
         # Get results
         L_aLNG = self._obj.SD  # Mean fatigue strength from analysis
@@ -140,9 +161,9 @@ class HuckMethod(woehler.Elementary):
         for load in loads:
             plt.axhline(y=load, color='lightgray', linestyle='-', alpha=0.5)
         
-        # Plot test points
-        for i, row in self._fd._obj.iterrows():
-            x = i
+        # Plot test points - show only the points in the infinite zone
+        for i, row in infinite_zone.iterrows():
+            x = i  # Can use index as x-coordinate
             y = row.load
             if row.fracture:
                 plt.plot(x, y, 'ko', markersize=8)  # Black circle for fracture

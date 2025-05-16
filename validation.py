@@ -93,8 +93,8 @@ if not nm_results['success'] or not nm_results['reasonable_values'] or switch==T
 from huck import HuckMethod
 
 def analyze_with_huck(fatigue_data):
-    """Run analysis using Huck's method"""
-    print("\n=== Running Huck's Method Analysis ===")
+    """Run analysis using Huck's method (staircase-based)"""
+    print("\n=== Running Huck's Method Analysis (Staircase Region Only) ===")
     
     # Create analyzer and run analysis
     analyzer = HuckMethod(fatigue_data)
@@ -105,11 +105,11 @@ def analyze_with_huck(fatigue_data):
     
     # Print summary
     print("\nHuck's Method Results:")
-    print(f"SD (Pü50): {result.SD:.2f}")
-    print(f"TS: {result.TS:.4f}")
-    print(f"slog: {slog:.4f}")
-    print(f"ND: {result.ND:.2f}")
-    print(f"k_1: {result.k_1:.2f}")
+    print(f"SD (Pü50): {result.SD:.2f}  <- Primary result from Huck's method")
+    print(f"TS: {result.TS:.4f}  <- Derived from staircase region only")
+    print(f"slog: {slog:.4f}  <- Derived from staircase region only")
+    print(f"ND: {result.ND:.2f}  <- Inherited from Elementary analysis")
+    print(f"k_1: {result.k_1:.2f}  <- Inherited from Elementary analysis")
     
     # Visualize staircase
     analyzer.plot_staircase()
@@ -119,12 +119,28 @@ def analyze_with_huck(fatigue_data):
 # %% Compare MaxLikeInf to Huck method 
 
 #!TODO move to woehler_utils.py
-def compare_methods(fatigue_data, ref_values=None):
+def compare_methods(fatigue_data, ref_values=None, dataset_name="Unknown"):
     """Compare MaxLikeInf (Nelder-Mead), L-BFGS-B and Huck method results"""
+    results_list = []  # Will store all results as rows
+        
     # Run Nelder-Mead
     ml_analyzer = woehler.MaxLikeInf(fatigue_data)
     ml_result = ml_analyzer.analyze()
     ml_slog = np.log10(ml_result.TS)/2.5361
+    
+    # Create row for Nelder-Mead results
+    nm_row = {
+        'Dataset': dataset_name,
+        'Method': 'Nelder-Mead',
+        'SD (Pü50)': ml_result.SD,
+        'TS': ml_result.TS,
+        'slog': ml_slog,
+        'ND': ml_result.ND,
+        'k': ml_result.k_1,
+        'Optimizer Message': 'Standard analysis',
+        'Convergence Plot': 'N/A'
+    }
+    results_list.append(nm_row)
     
     # Check if Nelder-Mead results are reasonable
     min_load = fatigue_data.load.min()
@@ -135,6 +151,9 @@ def compare_methods(fatigue_data, ref_values=None):
         nm_reasonable = False
         print("Nelder-Mead results appear unreasonable. Running L-BFGS-B...")
         
+        # Update Nelder-Mead row with warning
+        nm_row['Optimizer Message'] = 'Unreasonable values detected'
+        
         # Run L-BFGS-B
         lh = Likelihood(fatigue_data)
         bounds = [(min_load * 0.5, max_load * 2.0), (1.0, 50.0)]
@@ -144,84 +163,113 @@ def compare_methods(fatigue_data, ref_values=None):
             method='l-bfgs-b',
             bounds=bounds
         )
-        
-        # Create a Series with L-BFGS-B results in PyLife format
+
+        # Create L-BFGS-B results row
         lbfgs_sd, lbfgs_ts = lbfgs_results['SD'], lbfgs_results['TS']
+        lbfgs_slog = np.log10(lbfgs_ts)/2.5361
+        
+        lbfgs_row = {
+            'Dataset': dataset_name,
+            'Method': 'L-BFGS-B',
+            'SD (Pü50)': lbfgs_sd,
+            'TS': lbfgs_ts,
+            'slog': lbfgs_slog,
+            'ND': ml_result.ND,  # Same as Nelder-Mead
+            'k': ml_result.k_1,  # Same as Nelder-Mead
+            'Optimizer Message': lbfgs_results['message'],
+            'Convergence Plot': 'See plot in notebook'
+        }
+        results_list.append(lbfgs_row)
+        
+        # Create a Series for return value
         lbfgs_series = pd.Series({
             'SD': lbfgs_sd,
             'TS': lbfgs_ts,
-            'ND': ml_result.ND,  # Use same ND and k_1 as these aren't affected
+            'ND': ml_result.ND,
             'k_1': ml_result.k_1
         })
-        lbfgs_slog = np.log10(lbfgs_ts)/2.5361
     else:
-        lbfgs_series = None
-        lbfgs_slog = None
+        lbfgs_series = None    
     
     # Run Huck method
     huck_analyzer = HuckMethod(fatigue_data)
     huck_result = huck_analyzer.analyze()
     huck_slog = np.log10(huck_result.TS)/2.5361
     
-    # Create comparison table
-    comparison = {
-        'Parameter': ['SD (Pü50)', 'TS', 'slog', 'ND', 'k_1']
+    # Create Huck method row
+    huck_row = {
+        'Dataset': dataset_name,
+        'Method': 'Huck (Staircase)',
+        'SD (Pü50)': huck_result.SD,
+        'TS': huck_result.TS,
+        'slog': huck_slog,
+        'ND': huck_result.ND,
+        'k': huck_result.k_1,
+        'Optimizer Message': 'SD from staircase region; ND and k from Elementary',
+        'Convergence Plot': 'N/A'
     }
-    
-    # Collect method names first - important to avoid dictionary modification during iteration
-    method_names = ['Nelder-Mead']
-    if not nm_reasonable and lbfgs_series is not None:
-        method_names.append('L-BFGS-B')
-    method_names.append('Huck')
-    
-    # Always add Nelder-Mead results
-    comparison['Nelder-Mead'] = [
-        f"{ml_result.SD:.2f}", 
-        f"{ml_result.TS:.2f}",
-        f"{ml_slog:.2f}",
-        f"{ml_result.ND:.0f}",
-        f"{ml_result.k_1:.2f}"
-    ]
-    
-    # Add L-BFGS-B results if available
-    if not nm_reasonable and lbfgs_series is not None:
-        comparison['L-BFGS-B'] = [
-            f"{lbfgs_series.SD:.2f}", 
-            f"{lbfgs_series.TS:.2f}",
-            f"{lbfgs_slog:.2f}",
-            f"{lbfgs_series.ND:.0f}",
-            f"{lbfgs_series.k_1:.2f}"
-        ]
-    
-    # Add Huck results
-    comparison['Huck'] = [
-        f"{huck_result.SD:.2f}", 
-        f"{huck_result.TS:.2f}",
-        f"{huck_slog:.2f}",
-        f"{huck_result.ND:.0f}",
-        f"{huck_result.k_1:.2f}"
-    ]
+    results_list.append(huck_row)
     
     # Add reference values if available
     if ref_values is not None:
-        comparison['Reference'] = [
-            f"{ref_values.get('Pü50', 'N/A')}", 
-            f"{ref_values.get('TS', 'N/A')}",
-            f"{ref_values.get('slog', 'N/A')}",
-            f"{ref_values.get('ND', 'N/A')}",
-            f"{ref_values.get('k', 'N/A')}"
-        ]
+        ref_row = {
+            'Dataset': dataset_name,
+            'Method': 'Jurojin Reference',
+            'SD (Pü50)': ref_values.get('Pü50', None),
+            'TS': ref_values.get('TS', None),
+            'slog': ref_values.get('slog', None),
+            'ND': ref_values.get('ND', None),
+            'k': ref_values.get('k', None),
+            'Optimizer Message': 'N/A',
+            'Convergence Plot': 'N/A'
+        }
+        results_list.append(ref_row)
     
-    comparison_df = pd.DataFrame(comparison)
+    # Create DataFrame from list of results
+    results_df = pd.DataFrame(results_list)
+    
+    # Display comparison table
     print("\nComparison of Methods:")
-    print(comparison_df)
+    display_df = results_df[['Method', 'SD (Pü50)', 'TS', 'slog', 'ND', 'k']]
+    print(display_df)
     
-    return comparison_df, ml_result, lbfgs_series if not nm_reasonable else None, huck_result
+    # Return complete results DataFrame along with original objects
+    return results_df, ml_result, lbfgs_series if not nm_reasonable else None, huck_result
+
+
+def save_comparison_to_excel(results_df, filename=None):
+    """Save comparison results to Excel in 'Validation' folder in the parent directory"""
+    # Create Validation directory in parent if it doesn't exist
+    validation_dir = os.path.join(os.path.dirname(os.getcwd()), "Validation")
+    os.makedirs(validation_dir, exist_ok=True)
+    
+    if filename is None:
+        # Use first dataset name in results
+        dataset_name = results_df['Dataset'].iloc[0]
+        filename = f'comparison_{dataset_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    
+    # Full path in Validation directory
+    full_path = os.path.join(validation_dir, filename)
+    
+    results_df.to_excel(full_path, index=False)
+    print(f"Results saved to {full_path}")
+    return full_path
 
 # %% Run comparison
 
-comparison_df, ml_result, lbfgs_result, huck_result = compare_methods(fatigue_data, ref_values)
+# Extract dataset name from file path
+dataset_name = os.path.basename(file_path).replace('.xlsx', '')
 
+# Run comparison with dataset name
+comparison_results, ml_result, lbfgs_result, huck_result = compare_methods(
+    fatigue_data, 
+    ref_values, 
+    dataset_name=dataset_name
+)
+
+# %%
+
+save_comparison_to_excel(comparison_results)
 
 # %% [markdown] about fmin() output 
 # ## SciPy fmin optimization output
