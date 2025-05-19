@@ -70,17 +70,24 @@ def load_and_prepare_data(file_path, ng):
         print(f"Load range: {min_load:.1f} to {max_load:.1f}")
         print(f"Calculated SD bounds: {sd_bounds}")
         
-        # Initialize global results dictionary for this dataset
+        # Initialize global results dictionary only if new dataset
         global ANALYSIS_RESULTS
-        ANALYSIS_RESULTS = {
-            'dataset_info': {
-                'path': file_path,
-                'ng': ng,
-                'total_points': fatigue_data.num_tests,
-                'load_range': (min_load, max_load)
+        current_dataset_path = file_path
+        existing_path = ANALYSIS_RESULTS.get('dataset_info', {}).get('path', None)
+
+        if existing_path != current_dataset_path:
+            # New dataset - reset results
+            ANALYSIS_RESULTS = {
+                'dataset_info': {
+                    'path': file_path,
+                    'ng': ng,
+                    'total_points': fatigue_data.num_tests,
+                    'load_range': (min_load, max_load)
+                }
             }
-        }
-        print(f"Global results dictionary initialized")
+            print(f"New dataset - global results dictionary initialized")
+        else:
+            print(f"Same dataset - keeping existing results")
         
         return fatigue_data, sd_bounds, df_prepared
         
@@ -202,7 +209,7 @@ def run_lbfgsb_analysis(fatigue_data, ts_bounds=None):
         
         final_sd = result.x[0]
         final_ts = fixed_ts
-        method_name = "LBFGSB_HuckTS"
+        ts_source = "Huck"
         
     else:
         # Optimize both SD and TS within provided bounds
@@ -235,7 +242,7 @@ def run_lbfgsb_analysis(fatigue_data, ts_bounds=None):
         )
         
         final_sd, final_ts = result.x
-        method_name = "LBFGSB_Manual"
+        ts_source = "Manual"
     
     # Calculate additional parameters
     slog = np.log10(final_ts) / 2.5361
@@ -256,7 +263,7 @@ def run_lbfgsb_analysis(fatigue_data, ts_bounds=None):
     
     # Prepare results dictionary
     results_dict = {
-        'Method': method_name,
+        'Method': 'L-BFGS-B',  # Consistent method name
         'SD': final_sd,
         'TS': final_ts,
         'slog': slog,
@@ -268,7 +275,7 @@ def run_lbfgsb_analysis(fatigue_data, ts_bounds=None):
         'iterations': len(optimization_steps),
         'function_evaluations': result.nfev if hasattr(result, 'nfev') else 'N/A',
         'optimization_steps': optimization_steps,
-        'ts_source': 'Huck' if ts_bounds is None else 'Manual',
+        'ts_source': ts_source,  # Track whether TS from Huck or Manual
         'result_object': pd.Series({
             'SD': final_sd, 'TS': final_ts, 'ND': final_nd, 
             'k_1': slope, 'TN': elementary_result.TN
@@ -602,4 +609,10 @@ if 'ANALYSIS_RESULTS' in globals() and len(ANALYSIS_RESULTS) > 1:  # More than j
 else:
     print("No results to compile. Run analysis first.")
 
+
+# %%
+print("Current ANALYSIS_RESULTS:")
+for method_name, results in ANALYSIS_RESULTS.items():
+    if method_name != 'dataset_info':
+        print(f"  {method_name}: SD={results['SD']:.2f}")
 # %%
