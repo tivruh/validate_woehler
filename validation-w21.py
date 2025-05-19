@@ -68,7 +68,19 @@ def load_and_prepare_data(file_path, ng):
         print(f"Data loaded successfully!")
         print(f"Total data points: {len(df_prepared)}")
         print(f"Load range: {min_load:.1f} to {max_load:.1f}")
-        print(f"Calculated SD bounds: ({sd_bounds[0]:.1f}, {sd_bounds[1]:.1f})")
+        print(f"Calculated SD bounds: {sd_bounds}")
+        
+        # Initialize global results dictionary for this dataset
+        global ANALYSIS_RESULTS
+        ANALYSIS_RESULTS = {
+            'dataset_info': {
+                'path': file_path,
+                'ng': ng,
+                'total_points': fatigue_data.num_tests,
+                'load_range': (min_load, max_load)
+            }
+        }
+        print(f"Global results dictionary initialized")
         
         return fatigue_data, sd_bounds, df_prepared
         
@@ -148,6 +160,125 @@ def run_maxlike_analysis(fatigue_data):
     
     return results_dict
 
+
+# %% Method 2: L-BFGS-B Analysis
+def run_lbfgsb_analysis(fatigue_data, ts_bounds=None):
+    """Run L-BFGS-B analysis with optional TS bounds or Huck's TS as default"""
+    
+    # Determine TS handling approach
+    if ts_bounds is None:
+        # Use Huck's method for deterministic TS
+        print("No TS bounds provided. Using Huck's method for deterministic TS...")
+        huck_analyzer = HuckMethod(fatigue_data)
+        huck_result = huck_analyzer.analyze()
+        fixed_ts = huck_result.TS
+        print(f"Huck's TS: {fixed_ts:.4f}")
+        
+        # Optimization setup: only optimize SD
+        optimization_steps = []
+        lh = Likelihood(fatigue_data)
+        
+        def objective_function_fixed_ts(sd_array):
+            sd = sd_array[0]
+            likelihood = lh.likelihood_infinite(sd, fixed_ts)
+            optimization_steps.append({
+                'Step': len(optimization_steps) + 1,
+                'SD': sd,
+                'TS': fixed_ts,
+                'Likelihood': likelihood
+            })
+            return -likelihood
+        
+        # Run optimization with only SD bounds
+        sd_bounds = [(SD_BOUNDS[0], SD_BOUNDS[1])]
+        initial_sd = fatigue_data.fatigue_limit
+        
+        result = optimize.minimize(
+            objective_function_fixed_ts,
+            [initial_sd],
+            method='L-BFGS-B',
+            bounds=sd_bounds
+        )
+        
+        final_sd = result.x[0]
+        final_ts = fixed_ts
+        method_name = "LBFGSB_HuckTS"
+        
+    else:
+        # Optimize both SD and TS within provided bounds
+        print(f"Using manual TS bounds: {ts_bounds}")
+        
+        # Optimization setup: optimize both SD and TS
+        optimization_steps = []
+        lh = Likelihood(fatigue_data)
+        
+        def objective_function_both(params):
+            sd, ts = params
+            likelihood = lh.likelihood_infinite(sd, ts)
+            optimization_steps.append({
+                'Step': len(optimization_steps) + 1,
+                'SD': sd,
+                'TS': ts,
+                'Likelihood': likelihood
+            })
+            return -likelihood
+        
+        # Set up bounds for both parameters
+        bounds = [SD_BOUNDS, ts_bounds]
+        initial_params = [fatigue_data.fatigue_limit, 1.2]
+        
+        result = optimize.minimize(
+            objective_function_both,
+            initial_params,
+            method='L-BFGS-B',
+            bounds=bounds
+        )
+        
+        final_sd, final_ts = result.x
+        method_name = "LBFGSB_Manual"
+    
+    # Calculate additional parameters
+    slog = np.log10(final_ts) / 2.5361
+    
+    # Recalculate ND using optimized SD (consistent with MaxLikeInf approach)
+    # Need to get Elementary result for slope calculation
+    elementary_analyzer = woehler.Elementary(fatigue_data)
+    elementary_result = elementary_analyzer.analyze()
+    
+    # Calculate ND using the transition_cycles method approach
+    slope = elementary_result.k_1
+    # Using the same formula as in elementary.py _transition_cycles
+    lg_intercept = np.log10(elementary_result.ND) - (-slope) * np.log10(elementary_result.SD)
+    final_nd = 10**(lg_intercept + (-slope) * np.log10(final_sd))
+    
+    # Get optimization status message
+    status_msg = "Success" if result.success else f"Failed: {result.message}"
+    
+    # Prepare results dictionary
+    results_dict = {
+        'Method': method_name,
+        'SD': final_sd,
+        'TS': final_ts,
+        'slog': slog,
+        'ND': final_nd,
+        'k_1': slope,
+        'TN': elementary_result.TN,
+        'optimization_success': result.success,
+        'status_message': status_msg,
+        'iterations': len(optimization_steps),
+        'function_evaluations': result.nfev if hasattr(result, 'nfev') else 'N/A',
+        'optimization_steps': optimization_steps,
+        'ts_source': 'Huck' if ts_bounds is None else 'Manual',
+        'result_object': pd.Series({
+            'SD': final_sd, 'TS': final_ts, 'ND': final_nd, 
+            'k_1': slope, 'TN': elementary_result.TN
+        })
+    }
+    
+    return results_dict
+
+
+# %% Plotting functions
 def display_sn_curve(fatigue_data, result, method_name):
     """Display SN curve in Jupyter"""
     df = fatigue_data._obj
@@ -314,32 +445,84 @@ def save_convergence_plot(optimization_steps, output_dir, method_name):
     fig.write_image(os.path.join(output_dir, 'convergence.png'))
 
 
-
-# %% Load the data
-fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(DATASET_PATH, NG)
-
-if fatigue_data is not None:
-    # Update global SD_BOUNDS
-    SD_BOUNDS = calculated_sd_bounds
+# %% Compile Comparison Results to Excel
+def compile_results_to_excel(analysis_results, filename=None, output_base_dir=OUTPUT_BASE_DIR):
+    """Compile all method results into comparison Excel file"""
     
-    # Initialize global results dictionary for this dataset
-    global ANALYSIS_RESULTS
-    ANALYSIS_RESULTS = {
-        'dataset_info': {
-            'path': file_path,
-            'ng': ng,
-            'total_points': fatigue_data.num_tests,
-            'load_range': (min_load, max_load)
+    # Create Results_Comparison directory
+    comparison_dir = os.path.join(output_base_dir, "Results_Comparison")
+    os.makedirs(comparison_dir, exist_ok=True)
+    
+    # Default filename if not provided
+    if filename is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"comparison_results_{timestamp}.xlsx"
+    
+    # Ensure .xlsx extension
+    if not filename.endswith('.xlsx'):
+        filename += '.xlsx'
+    
+    filepath = os.path.join(comparison_dir, filename)
+    
+    # Extract dataset info
+    dataset_info = analysis_results.get('dataset_info', {})
+    dataset_name = os.path.basename(dataset_info.get('path', 'Unknown'))
+    
+    # Compile results from all methods
+    comparison_rows = []
+    for method_name, method_results in analysis_results.items():
+        if method_name == 'dataset_info':  # Skip dataset info
+            continue
+            
+        row = {
+            'Dataset': dataset_name,
+            'Method': method_name,
+            'SD': method_results.get('SD'),
+            'TS': method_results.get('TS'),
+            'slog': method_results.get('slog'),
+            'ND': method_results.get('ND'),
+            'k_1': method_results.get('k_1'),
+            'TN': method_results.get('TN'),
+            'Status': method_results.get('status_message', 'N/A'),
+            'Iterations': method_results.get('iterations', 'N/A'),
+            'NG': dataset_info.get('ng'),
+            'Total_Points': dataset_info.get('total_points'),
+            'Timestamp': datetime.now().strftime("%Y%m%d_%H%M%S")
         }
-    }
-    print(f"Ready for analysis with {fatigue_data.num_tests} test points")
-    print(f"Global results dictionary initialized")
+        comparison_rows.append(row)
     
-else:
-    print("Failed to load data. Check file path and format.")
+    if not comparison_rows:
+        print("No method results to compile!")
+        return None
     
-# Global results dictionary (will be initialized when data loads)
-ANALYSIS_RESULTS = {}
+    # Create DataFrame
+    new_df = pd.DataFrame(comparison_rows)
+    
+    # Check if file exists
+    if os.path.exists(filepath):
+        # Append to existing file
+        try:
+            existing_df = pd.read_excel(filepath)
+            combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+            print(f"Appending {len(new_df)} rows to existing file")
+        except Exception as e:
+            print(f"Error reading existing file: {e}")
+            print("Creating new file instead")
+            combined_df = new_df
+    else:
+        # Create new file
+        combined_df = new_df
+        print(f"Creating new comparison file")
+    
+    # Save to Excel
+    try:
+        combined_df.to_excel(filepath, index=False)
+        print(f"Results compiled to: {filepath}")
+        print(f"Total rows in file: {len(combined_df)}")
+        return filepath
+    except Exception as e:
+        print(f"Error saving Excel file: {e}")
+        return None
 
 
 # %% Run Analysis - File Selection, Data Loading, and Method Execution
@@ -356,35 +539,51 @@ if fatigue_data is not None:
     
     # Method selection
     METHOD_TO_RUN = "MaxLikeInf"  # Change this for different methods
+    # Available Methods: MaxLikeInf, L-BFGS-B, MaxLikeFull
 
     # Run selected analysis
     if METHOD_TO_RUN == "MaxLikeInf":
         method_results = run_maxlike_analysis(fatigue_data)
         
-    # Store in global results dictionary
-    ANALYSIS_RESULTS[METHOD_TO_RUN] = method_results
-    maxlike_results = method_results  # Keep for display compatibility
+    elif METHOD_TO_RUN == "L-BFGS-B":
+        # Default: uses Huck's TS. Manual TS bounds e.g.: ts_bounds=(1.0, 10.0)
+        method_results = run_lbfgsb_analysis(fatigue_data)
+        
+    # elif METHOD_TO_RUN == "MaxLikeFull":
+    #     # Default: uses Huck's TS. Manual TS bounds e.g.: ts_bounds=(1.0, 10.0)
+    #     method_results = run_maxlikefull_analysis(fatigue_data)
+        
+    else:
+        print(f"Unknown method: {METHOD_TO_RUN}")
+        method_results = None
     
-    # Display results
-    print(f"\n=== MaxLikeInf Results ===")
-    print(f"SD: {maxlike_results['SD']:.2f}")
-    print(f"TS: {maxlike_results['TS']:.3f}")
-    print(f"slog: {maxlike_results['slog']:.4f}")
-    print(f"ND: {maxlike_results['ND']:.0f}")
-    print(f"k_1: {maxlike_results['k_1']:.3f}")
-    print(f"Status: {maxlike_results['status_message']}")
-    print(f"Iterations: {maxlike_results['iterations']}")
-    
-    # Display SN curve and convergence plot
-    display_sn_curve(fatigue_data, maxlike_results['result_object'], "MaxLikeInf")
-    display_convergence_plot(maxlike_results['optimization_steps'], "MaxLikeInf")
-    
-    print(f"\nAnalysis complete. Results ready for saving.")
+    if method_results is not None:
+        # Store in global results dictionary
+        ANALYSIS_RESULTS[method_results['Method']] = method_results
+        
+        # Display results
+        print(f"\n=== {method_results['Method']} Results ===")
+        print(f"SD: {method_results['SD']:.2f}")
+        print(f"TS: {method_results['TS']:.3f}")
+        print(f"slog: {method_results['slog']:.4f}")
+        print(f"ND: {method_results['ND']:.0f}")
+        print(f"k_1: {method_results['k_1']:.3f}")
+        print(f"Status: {method_results['status_message']}")
+        print(f"Iterations: {method_results['iterations']}")
+        
+        # Display SN curve and convergence plot
+        display_sn_curve(fatigue_data, method_results['result_object'], method_results['Method'])
+        display_convergence_plot(method_results['optimization_steps'], method_results['Method'])
+        
+        print(f"\nAnalysis complete. Results ready for saving.")
+    else:
+        print("Analysis failed.")
 else:
     print("Failed to load data. Check file path and format.")
     
 
 # %% Method to save (change this to save different methods)
+
 METHOD_TO_SAVE = "MaxLikeInf"  # Change this as needed
 
 # Save selected method results
@@ -393,5 +592,15 @@ if 'ANALYSIS_RESULTS' in globals() and METHOD_TO_SAVE in ANALYSIS_RESULTS:
     print(f"Saved {METHOD_TO_SAVE} results")
 else:
     print(f"No {METHOD_TO_SAVE} results to save. Run analysis first.")
+
+
+# %% Compile current analysis results to Excel
+# Update the filename as needed, or leave None for automatic timestamp
+COMPARISON_FILENAME = None  # or "my_campaign_results.xlsx"
+
+if 'ANALYSIS_RESULTS' in globals() and len(ANALYSIS_RESULTS) > 1:  # More than just dataset_info
+    compile_results_to_excel(ANALYSIS_RESULTS, COMPARISON_FILENAME)
+else:
+    print("No results to compile. Run analysis first.")
 
 # %%
