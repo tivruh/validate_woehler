@@ -77,16 +77,6 @@ def load_and_prepare_data(file_path, ng):
         traceback.print_exc()
         return None, None, None
 
-# %% Load the data
-fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(DATASET_PATH, NG)
-
-if fatigue_data is not None:
-    # Update global SD_BOUNDS
-    SD_BOUNDS = calculated_sd_bounds
-    print(f"Ready for analysis with {fatigue_data.num_tests} test points")
-else:
-    print("Failed to load data. Check file path and format.")
-
     
 # %% Method 1: MaxLikeInf Analysis with Tracking
 class MaxLikeInfWithTracking(woehler.MaxLikeInf):
@@ -228,46 +218,6 @@ def display_convergence_plot(optimization_steps, method_name):
     fig.update_layout(title=f'{method_name} Convergence', height=400, showlegend=False)
     fig.show()
 
-# Run MaxLikeInf analysis
-if fatigue_data is not None:
-    maxlike_results = run_maxlike_analysis(fatigue_data)
-else:
-    print("Cannot run analysis: no data loaded")
-
-
-# %% Run Analysis - File Selection, Data Loading, and Method Execution
-# Update these settings and run this block
-DATASET_PATH = "All Data/4PB_2.xlsx"  # Update this path
-NG = 5000000                          # Update if needed
-
-# Load and prepare data
-fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(DATASET_PATH, NG)
-
-if fatigue_data is not None:
-    # Update global SD_BOUNDS for other methods
-    SD_BOUNDS = calculated_sd_bounds
-    
-    # Run MaxLikeInf analysis
-    maxlike_results = run_maxlike_analysis(fatigue_data)
-    
-    # Display results
-    print(f"\n=== MaxLikeInf Results ===")
-    print(f"SD: {maxlike_results['SD']:.2f}")
-    print(f"TS: {maxlike_results['TS']:.3f}")
-    print(f"slog: {maxlike_results['slog']:.4f}")
-    print(f"ND: {maxlike_results['ND']:.0f}")
-    print(f"k_1: {maxlike_results['k_1']:.3f}")
-    print(f"Status: {maxlike_results['status_message']}")
-    print(f"Iterations: {maxlike_results['iterations']}")
-    
-    # Display SN curve and convergence plot
-    display_sn_curve(fatigue_data, maxlike_results['result_object'], "MaxLikeInf")
-    display_convergence_plot(maxlike_results['optimization_steps'], "MaxLikeInf")
-    
-    print(f"\nAnalysis complete. Results ready for saving.")
-else:
-    print("Failed to load data. Check file path and format.")
-    
     
 # %% Save Results to File
 def save_method_results(results_dict, fatigue_data, output_base_dir):
@@ -363,10 +313,85 @@ def save_convergence_plot(optimization_steps, output_dir, method_name):
     fig.update_layout(title=f'{method_name} Convergence', height=400, showlegend=False)
     fig.write_image(os.path.join(output_dir, 'convergence.png'))
 
-# Save MaxLikeInf results (run after analysis)
-if 'maxlike_results' in locals() and maxlike_results is not None:
-    save_method_results(maxlike_results, fatigue_data, OUTPUT_BASE_DIR)
+
+
+# %% Load the data
+fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(DATASET_PATH, NG)
+
+if fatigue_data is not None:
+    # Update global SD_BOUNDS
+    SD_BOUNDS = calculated_sd_bounds
+    
+    # Initialize global results dictionary for this dataset
+    global ANALYSIS_RESULTS
+    ANALYSIS_RESULTS = {
+        'dataset_info': {
+            'path': file_path,
+            'ng': ng,
+            'total_points': fatigue_data.num_tests,
+            'load_range': (min_load, max_load)
+        }
+    }
+    print(f"Ready for analysis with {fatigue_data.num_tests} test points")
+    print(f"Global results dictionary initialized")
+    
 else:
-    print("No results to save. Run analysis first.")
+    print("Failed to load data. Check file path and format.")
+    
+# Global results dictionary (will be initialized when data loads)
+ANALYSIS_RESULTS = {}
+
+
+# %% Run Analysis - File Selection, Data Loading, and Method Execution
+# Update these settings and run this block
+DATASET_PATH = "All Data/4PB_2.xlsx"  # Update this path
+NG = 5000000                          # Update if needed
+
+# Load and prepare data
+fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(DATASET_PATH, NG)
+
+if fatigue_data is not None:
+    # Update global SD_BOUNDS for other methods
+    SD_BOUNDS = calculated_sd_bounds
+    
+    # Method selection
+    METHOD_TO_RUN = "MaxLikeInf"  # Change this for different methods
+
+    # Run selected analysis
+    if METHOD_TO_RUN == "MaxLikeInf":
+        method_results = run_maxlike_analysis(fatigue_data)
+        
+    # Store in global results dictionary
+    ANALYSIS_RESULTS[METHOD_TO_RUN] = method_results
+    maxlike_results = method_results  # Keep for display compatibility
+    
+    # Display results
+    print(f"\n=== MaxLikeInf Results ===")
+    print(f"SD: {maxlike_results['SD']:.2f}")
+    print(f"TS: {maxlike_results['TS']:.3f}")
+    print(f"slog: {maxlike_results['slog']:.4f}")
+    print(f"ND: {maxlike_results['ND']:.0f}")
+    print(f"k_1: {maxlike_results['k_1']:.3f}")
+    print(f"Status: {maxlike_results['status_message']}")
+    print(f"Iterations: {maxlike_results['iterations']}")
+    
+    # Display SN curve and convergence plot
+    display_sn_curve(fatigue_data, maxlike_results['result_object'], "MaxLikeInf")
+    display_convergence_plot(maxlike_results['optimization_steps'], "MaxLikeInf")
+    
+    print(f"\nAnalysis complete. Results ready for saving.")
+else:
+    print("Failed to load data. Check file path and format.")
+    
+
+# %% Method to save (change this to save different methods)
+METHOD_TO_SAVE = "MaxLikeInf"  # Change this as needed
+
+# Save selected method results
+if 'ANALYSIS_RESULTS' in globals() and METHOD_TO_SAVE in ANALYSIS_RESULTS:
+    save_method_results(ANALYSIS_RESULTS[METHOD_TO_SAVE], fatigue_data, OUTPUT_BASE_DIR)
+    print(f"Saved {METHOD_TO_SAVE} results")
+else:
+    print(f"No {METHOD_TO_SAVE} results to save. Run analysis first.")
 
 # %%
