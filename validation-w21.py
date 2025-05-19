@@ -112,6 +112,37 @@ def load_and_prepare_data(file_path, ng):
         except:
             huck_result = None
             print(f"Huck's method failed")
+
+        # Store Jurojin reference in global results
+        if ref_values is not None:
+            ANALYSIS_RESULTS['Jurojin_Reference'] = {
+                'Method': 'Jurojin_Reference',
+                'SD': ref_values.get('Pü50', None),
+                'TS': ref_values.get('TS', None), 
+                'slog': ref_values.get('slog', None),
+                'ND': ref_values.get('ND', None),
+                'k_1': ref_values.get('k', None),
+                'TN': None,
+                'status_message': 'Reference values',
+                'iterations': 'N/A',
+                'ts_source': 'Reference'
+            }
+
+        # Store Huck's results in global results
+        if huck_result is not None:
+            ANALYSIS_RESULTS['Huck'] = {
+                'Method': 'Huck',
+                'SD': huck_result.SD,
+                'TS': huck_result.TS,
+                'slog': huck_slog,
+                'ND': huck_result.ND,
+                'k_1': huck_result.k_1,
+                'TN': huck_result.TN,
+                'status_message': 'Staircase analysis',
+                'iterations': 'N/A',
+                'ts_source': 'Huck'
+            }
+        
         
         return fatigue_data, sd_bounds, df_prepared
         
