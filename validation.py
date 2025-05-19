@@ -34,7 +34,7 @@ from woehler_utils import *
 
 # Sheet containing data must be named 'Data'
 
-file_path = "All Data/4PB_7.xlsx"
+file_path = "All Data/4PB_11.xlsx"
 
 N_LCF = 10000  # Pivot point in LCF
 NG = 5000000   # Maximum number of cycles
@@ -160,7 +160,7 @@ def compare_methods(fatigue_data, ref_values=None, dataset_name="Unknown"):
         
         # Run L-BFGS-B
         lh = Likelihood(fatigue_data)
-        bounds = [(min_load * 0.5, max_load * 2.0), (1.0, 50.0)]
+        bounds = [(min_load * 0.5, max_load * 2.0), (1.0, 10.0)]
         lbfgs_results = run_optimization_with_tracking(
             lh, 
             [fatigue_data.fatigue_limit, 1.2], 
@@ -171,6 +171,9 @@ def compare_methods(fatigue_data, ref_values=None, dataset_name="Unknown"):
         # Create L-BFGS-B results row
         lbfgs_sd, lbfgs_ts = lbfgs_results['SD'], lbfgs_results['TS']
         lbfgs_slog = np.log10(lbfgs_ts)/2.5361
+
+        # Recalculate ND using L-BFGS-B optimized SD (consistent with MaxLikeInf)
+        lbfgs_nd = ml_analyzer._transition_cycles(lbfgs_sd)
         
         lbfgs_row = {
             'Dataset': dataset_name,
@@ -178,8 +181,7 @@ def compare_methods(fatigue_data, ref_values=None, dataset_name="Unknown"):
             'SD (Pü50)': lbfgs_sd,
             'TS': lbfgs_ts,
             'slog': lbfgs_slog,
-            'ND': ml_result.ND,  # Same as Nelder-Mead
-            # 'k': ml_result.k_1,  # Same as Nelder-Mead
+            'ND': lbfgs_nd,
             'Optimizer Message': lbfgs_results['message'],
             'Convergence Plot': 'See plot in notebook'
         }
@@ -189,8 +191,7 @@ def compare_methods(fatigue_data, ref_values=None, dataset_name="Unknown"):
         lbfgs_series = pd.Series({
             'SD': lbfgs_sd,
             'TS': lbfgs_ts,
-            'ND': ml_result.ND,
-            # 'k_1': ml_result.k_1
+            'ND': lbfgs_nd,
         })
     else:
         lbfgs_series = None    
