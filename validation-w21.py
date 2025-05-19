@@ -537,9 +537,10 @@ if fatigue_data is not None:
     # Update global SD_BOUNDS for other methods
     SD_BOUNDS = calculated_sd_bounds
     
-    # Method selection
-    METHOD_TO_RUN = "MaxLikeInf"  # Change this for different methods
-    # Available Methods: MaxLikeInf, L-BFGS-B, MaxLikeFull
+    # Method selection: Uncomment what you want to run
+    # METHOD_TO_RUN = "MaxLikeInf"
+    METHOD_TO_RUN = "L-BFGS-B"
+    # METHOD_TO_RUN = "MaxLikeFull"
 
     # Run selected analysis
     if METHOD_TO_RUN == "MaxLikeInf":
@@ -582,16 +583,14 @@ else:
     print("Failed to load data. Check file path and format.")
     
 
-# %% Method to save (change this to save different methods)
-
-METHOD_TO_SAVE = "MaxLikeInf"  # Change this as needed
+# %% Save last run Method
 
 # Save selected method results
-if 'ANALYSIS_RESULTS' in globals() and METHOD_TO_SAVE in ANALYSIS_RESULTS:
-    save_method_results(ANALYSIS_RESULTS[METHOD_TO_SAVE], fatigue_data, OUTPUT_BASE_DIR)
-    print(f"Saved {METHOD_TO_SAVE} results")
+if 'ANALYSIS_RESULTS' in globals() and METHOD_TO_RUN in ANALYSIS_RESULTS:
+    save_method_results(ANALYSIS_RESULTS[METHOD_TO_RUN], fatigue_data, OUTPUT_BASE_DIR)
+    print(f"Saved {METHOD_TO_RUN} results")
 else:
-    print(f"No {METHOD_TO_SAVE} results to save. Run analysis first.")
+    print(f"No {METHOD_TO_RUN} results to save. Run analysis first.")
 
 
 # %% Compile current analysis results to Excel
