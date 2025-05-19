@@ -89,6 +89,30 @@ def load_and_prepare_data(file_path, ng):
         else:
             print(f"Same dataset - keeping existing results")
         
+        try:
+            df_ref = pd.read_excel(file_path, sheet_name='Jurojin_results', header=None)
+            ref_values = {}
+            for idx, row in df_ref.iterrows():
+                param_name = row[0]
+                param_value = row[1]
+                if isinstance(param_value, str) and ',' in param_value:
+                    param_value = float(param_value.replace(',', '.'))
+                ref_values[param_name] = param_value
+            print(f"Jurojin reference values extracted")
+        except:
+            ref_values = None
+            print(f"No Jurojin reference values found")
+
+        # Run Huck's method automatically
+        try:
+            huck_analyzer = HuckMethod(fatigue_data)
+            huck_result = huck_analyzer.analyze()
+            huck_slog = np.log10(huck_result.TS) / 2.5361
+            print(f"Huck's method completed: SD={huck_result.SD:.2f}")
+        except:
+            huck_result = None
+            print(f"Huck's method failed")
+        
         return fatigue_data, sd_bounds, df_prepared
         
     except Exception as e:
@@ -532,7 +556,7 @@ def compile_results_to_excel(analysis_results, filename=None, output_base_dir=OU
         return None
 
 
-# %% Run Analysis - File Selection, Data Loading, and Method Execution
+# %% File Selection, Data Loading
 # Update these settings and run this block
 DATASET_PATH = "All Data/4PB_2.xlsx"  # Update this path
 NG = 5000000                          # Update if needed
@@ -540,13 +564,15 @@ NG = 5000000                          # Update if needed
 # Load and prepare data
 fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(DATASET_PATH, NG)
 
+# %% Select Method, run Analysis
+
 if fatigue_data is not None:
     # Update global SD_BOUNDS for other methods
     SD_BOUNDS = calculated_sd_bounds
     
     # Method selection: Uncomment what you want to run
-    # METHOD_TO_RUN = "MaxLikeInf"
-    METHOD_TO_RUN = "L-BFGS-B"
+    METHOD_TO_RUN = "MaxLikeInf"
+    # METHOD_TO_RUN = "L-BFGS-B"
     # METHOD_TO_RUN = "MaxLikeFull"
 
     # Run selected analysis
