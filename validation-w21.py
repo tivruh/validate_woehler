@@ -340,6 +340,59 @@ def run_lbfgsb_analysis(fatigue_data, ts_bounds=None):
     return results_dict
 
 
+# %% Method 3: MaxLikeFull Analysis  
+def run_maxlikefull_analysis(fatigue_data, ts_bounds=None):
+    """Run MaxLikeFull analysis with optional TS bounds or Huck's TS as default"""
+    
+    # Determine TS handling approach
+    if ts_bounds is None:
+        # Use Huck's method for deterministic TS
+        print("No TS bounds provided. Using Huck's method for deterministic TS...")
+        huck_analyzer = HuckMethod(fatigue_data)
+        huck_result = huck_analyzer.analyze()
+        fixed_ts = huck_result.TS
+        print(f"Huck's TS: {fixed_ts:.4f}")
+        
+        # Run MaxLikeFull with fixed TS
+        analyzer = woehler.MaxLikeFull(fatigue_data)
+        result = analyzer.analyze(fixed_parameters={'TS': fixed_ts})
+        ts_source = "Huck"
+        
+    else:
+        # Let MaxLikeFull optimize both SD and TS within bounds
+        print(f"Using manual TS bounds: {ts_bounds}")
+        print("Note: MaxLikeFull doesn't directly support TS bounds - optimizing freely")
+        
+        # Run standard MaxLikeFull (optimizes all parameters)
+        analyzer = woehler.MaxLikeFull(fatigue_data)
+        result = analyzer.analyze()
+        ts_source = "Manual"
+    
+    # Calculate slog
+    slog = np.log10(result.TS) / 2.5361
+    
+    # Get status message
+    status_msg = "Success"  # MaxLikeFull doesn't return detailed status
+    
+    # Prepare results dictionary
+    results_dict = {
+        'Method': 'MaxLikeFull',  # Consistent method name
+        'SD': result.SD,
+        'TS': result.TS,
+        'slog': slog,
+        'ND': result.ND,
+        'k_1': result.k_1,
+        'TN': result.TN,
+        'status_message': status_msg,
+        'iterations': 'N/A',  # No tracking available
+        'optimization_steps': [],  # Empty for compatibility
+        'ts_source': ts_source,  # Track whether TS from Huck or Manual
+        'result_object': result
+    }
+    
+    return results_dict
+
+
 # %% Plotting functions
 def display_sn_curve(fatigue_data, result, method_name):
     """Display SN curve in Jupyter"""
@@ -589,7 +642,7 @@ def compile_results_to_excel(analysis_results, filename=None, output_base_dir=OU
 
 # %% File Selection, Data Loading
 # Update these settings and run this block
-DATASET_PATH = "All Data/4PB_2.xlsx"  # Update this path
+DATASET_PATH = "All Data/4PB_7.xlsx"  # Update this path
 NG = 5000000                          # Update if needed
 
 # Load and prepare data
@@ -601,10 +654,11 @@ if fatigue_data is not None:
     # Update global SD_BOUNDS for other methods
     SD_BOUNDS = calculated_sd_bounds
     
-    # Method selection: Uncomment what you want to run
-    METHOD_TO_RUN = "MaxLikeInf"
+    # Method selection: Uncomment to select Method to run
+    
+    # METHOD_TO_RUN = "MaxLikeInf"
     # METHOD_TO_RUN = "L-BFGS-B"
-    # METHOD_TO_RUN = "MaxLikeFull"
+    METHOD_TO_RUN = "MaxLikeFull"
 
     # Run selected analysis
     if METHOD_TO_RUN == "MaxLikeInf":
@@ -614,9 +668,9 @@ if fatigue_data is not None:
         # Default: uses Huck's TS. Manual TS bounds e.g.: ts_bounds=(1.0, 10.0)
         method_results = run_lbfgsb_analysis(fatigue_data)
         
-    # elif METHOD_TO_RUN == "MaxLikeFull":
-    #     # Default: uses Huck's TS. Manual TS bounds e.g.: ts_bounds=(1.0, 10.0)
-    #     method_results = run_maxlikefull_analysis(fatigue_data)
+    elif METHOD_TO_RUN == "MaxLikeFull":
+        # Default: uses Huck's TS. Manual TS bounds e.g.: ts_bounds=(1.0, 10.0)
+        method_results = run_maxlikefull_analysis(fatigue_data)
         
     else:
         print(f"Unknown method: {METHOD_TO_RUN}")
@@ -672,4 +726,61 @@ print("Current ANALYSIS_RESULTS:")
 for method_name, results in ANALYSIS_RESULTS.items():
     if method_name != 'dataset_info':
         print(f"  {method_name}: SD={results['SD']:.2f}")
+        
+    
+# %% Run All Methods - Complete Analysis and Save
+# Update dataset path and run this block to analyze with all methods
+DATASET_PATH = "All Data/NO35_gekerbt.xlsx"  # Update this path
+NG = 4000000                          # Update if needed
+
+# Load and prepare data
+print("=== Loading Dataset ===")
+fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(DATASET_PATH, NG)
+
+if fatigue_data is not None:
+    # Update global SD_BOUNDS for optimization methods
+    SD_BOUNDS = calculated_sd_bounds
+    
+    # List of methods to run
+    methods_to_run = ["MaxLikeInf", "L-BFGS-B", "MaxLikeFull"]
+    
+    print(f"\n=== Running All Methods ===")
+    for method_name in methods_to_run:
+        print(f"\n--- Running {method_name} ---")
+        
+        # Run selected analysis
+        if method_name == "MaxLikeInf":
+            method_results = run_maxlike_analysis(fatigue_data)
+            
+        elif method_name == "L-BFGS-B":
+            # Uses Huck's TS by default
+            method_results = run_lbfgsb_analysis(fatigue_data)
+            
+        elif method_name == "MaxLikeFull":
+            # Uses Huck's TS by default  
+            method_results = run_maxlikefull_analysis(fatigue_data)
+        
+        # Store in global results dictionary
+        ANALYSIS_RESULTS[method_results['Method']] = method_results
+        
+        # Display brief results
+        print(f"  SD: {method_results['SD']:.2f}")
+        print(f"  TS: {method_results['TS']:.3f}")
+        print(f"  Status: {method_results['status_message']}")
+        
+        # Save method results to directory
+        save_method_results(method_results, fatigue_data, OUTPUT_BASE_DIR)
+        print(f"  Results saved to directory")
+    
+    # Compile all results to Excel
+    print(f"\n=== Compiling Results to Excel ===")
+    compile_results_to_excel(ANALYSIS_RESULTS, filename="all_methods_comparison.xlsx")
+    
+    print(f"\n=== Analysis Complete ===")
+    print(f"Methods run: {list(ANALYSIS_RESULTS.keys())}")
+    print(f"All results saved and compiled!")
+    
+else:
+    print("Failed to load data. Check file path and format.")
+
 # %%
