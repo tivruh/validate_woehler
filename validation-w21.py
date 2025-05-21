@@ -64,11 +64,16 @@ def load_and_prepare_data(file_path, ng):
         min_load = fatigue_data.load.min()
         max_load = fatigue_data.load.max()
         sd_bounds = (min_load * 0.5, max_load * 2.0)
+        avg_sd = (min_load + max_load) / 2
+        
+        fatigue_data.avg_sd = avg_sd
         
         print(f"Data loaded successfully!")
         print(f"Total data points: {len(df_prepared)}")
         print(f"Load range: {min_load:.1f} to {max_load:.1f}")
         print(f"Calculated SD bounds: {sd_bounds}")
+        print(f"Average SD: {avg_sd:.1f}")
+        
         
         # Initialize global results dictionary only if new dataset
         global ANALYSIS_RESULTS
@@ -393,6 +398,125 @@ def run_maxlikefull_analysis(fatigue_data, ts_bounds=None):
     return results_dict
 
 
+# %% Method 4: Nelder-Mead Analysis with minimize + likelihood override
+
+# %% Method 4: Nelder-Mead with std_log
+
+# Custom Likelihood class to work with std_log directly
+class StdLogLikelihood(Likelihood):
+    """Custom Likelihood class that works with std_log instead of TS"""
+    
+    def __init__(self, fatigue_data):
+        super().__init__(fatigue_data)
+    
+    def likelihood_infinite(self, SD, std_log):
+        """Override to work with std_log directly instead of TS"""
+        infinite_zone = self._fd.infinite_zone
+        t = np.logical_not(self._fd.infinite_zone.fracture).astype(np.float64)
+        likelihood = stats.norm.cdf(np.log10(infinite_zone.load/SD), scale=abs(std_log))
+        non_log_likelihood = t+(1.-2.*t)*likelihood
+        if non_log_likelihood.eq(0.0).any():
+            return -np.inf
+
+        return np.log(non_log_likelihood).sum()
+
+def run_nelder_mead_stdlog_analysis(fatigue_data):
+    """Run Nelder-Mead analysis using std_log instead of TS"""
+    
+    # Create custom likelihood object
+    custom_lh = StdLogLikelihood(fatigue_data)
+    
+    # Initial values
+    initial_sd = fatigue_data.avg_sd  # Use avg_sd as starting point
+    initial_std_log = 1.0            # Start with slog=1 as requested
+    
+    print(f"Using Nelder-Mead with std_log - Initial SD: {initial_sd:.2f}, Initial std_log: {initial_std_log:.2f}")
+    
+    # Setup optimization tracking
+    optimization_steps = []
+    
+    # Define objective function with tracking
+    def tracked_objective(params):
+        sd, std_log = params
+        likelihood = custom_lh.likelihood_infinite(sd, std_log)
+        
+        # Convert std_log to TS for tracking and later comparison
+        ts_value = 10**(2.5361 * std_log)
+        
+        optimization_steps.append({
+            'Step': len(optimization_steps) + 1,
+            'SD': sd,
+            'std_log': std_log,
+            'TS': ts_value,  # Calculate equivalent TS
+            'Likelihood': likelihood
+        })
+        
+        return -likelihood
+    
+    # Run Nelder-Mead optimization using minimize()
+    initial_params = [initial_sd, initial_std_log]
+    result = optimize.minimize(
+        tracked_objective,
+        initial_params,
+        method='Nelder-Mead',
+        options={'disp': False}  # Set to True for detailed output
+    )
+    
+    # Extract results
+    final_sd = result.x[0]
+    final_std_log = result.x[1]
+    final_ts = 10**(2.5361 * final_std_log)  # Convert to TS for compatibility
+    
+    # Calculate ND using Elementary parameters
+    elementary_analyzer = woehler.Elementary(fatigue_data)
+    elementary_result = elementary_analyzer.analyze()
+    
+    # Calculate ND using transition_cycles approach
+    slope = elementary_result.k_1
+    lg_intercept = np.log10(elementary_result.ND) - (-slope) * np.log10(elementary_result.SD)
+    final_nd = 10**(lg_intercept + (-slope) * np.log10(final_sd))
+    
+    # Create a Series for compatibility with other methods
+    result_series = pd.Series({
+        'SD': final_sd,
+        'TS': final_ts,
+        'ND': final_nd,
+        'k_1': slope,
+        'TN': elementary_result.TN,
+        'slog': final_std_log  # Store the optimized std_log
+    })
+    
+    # Get optimization metadata
+    status_message = f"Success: {result.success}, Message: {result.message}"
+    
+    # Prepare results dictionary
+    results_dict = {
+        'Method': 'Nelder-Mead-StdLog',
+        'SD': final_sd,
+        'TS': final_ts,
+        'slog': final_std_log,
+        'ND': final_nd,
+        'k_1': slope,
+        'TN': elementary_result.TN,
+        'optimization_success': result.success,
+        'status_message': status_message,
+        'iterations': result.nit if hasattr(result, 'nit') else None,
+        'function_evaluations': result.nfev,
+        'optimization_steps': optimization_steps,
+        'result_object': result_series  # Store for plotting
+    }
+    
+    # Print summary
+    print("\nNelder-Mead-StdLog Results:")
+    print(f"SD: {final_sd:.2f}")
+    print(f"std_log: {final_std_log:.4f} (equivalent TS: {final_ts:.2f})")
+    print(f"ND: {final_nd:.0f}")
+    print(f"Status: {status_message}")
+    print(f"Iterations: {result.nit if hasattr(result, 'nit') else 'N/A'}")
+    
+    return results_dict
+
+
 # %% Plotting functions
 def display_sn_curve(fatigue_data, result, method_name):
     """Display SN curve in Jupyter"""
@@ -658,7 +782,8 @@ if fatigue_data is not None:
     
     # METHOD_TO_RUN = "MaxLikeInf"
     # METHOD_TO_RUN = "L-BFGS-B"
-    METHOD_TO_RUN = "MaxLikeFull"
+    # METHOD_TO_RUN = "MaxLikeFull"
+    METHOD_TO_RUN = "Nelder-Mead-StdLog"
 
     # Run selected analysis
     if METHOD_TO_RUN == "MaxLikeInf":
@@ -671,6 +796,9 @@ if fatigue_data is not None:
     elif METHOD_TO_RUN == "MaxLikeFull":
         # Default: uses Huck's TS. Manual TS bounds e.g.: ts_bounds=(1.0, 10.0)
         method_results = run_maxlikefull_analysis(fatigue_data)
+        
+    elif METHOD_TO_RUN == "Nelder-Mead-StdLog":
+        method_results = run_nelder_mead_stdlog_analysis(fatigue_data)
         
     else:
         print(f"Unknown method: {METHOD_TO_RUN}")
