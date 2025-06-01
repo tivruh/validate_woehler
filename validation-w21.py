@@ -34,6 +34,9 @@ SD_BOUNDS = None # Will be calculated as (min_load * 0.5, max_load * 2.0)
 OUTPUT_BASE_DIR = "Validation_Output"
 COMPARISON_FILENAME = "method_comparison_results.xlsx"
 
+# Initialize global results dictionary
+ANALYSIS_RESULTS = {}
+
 # Create output directory if it doesn't exist
 os.makedirs(OUTPUT_BASE_DIR, exist_ok=True)
 
@@ -64,15 +67,11 @@ def load_and_prepare_data(file_path, ng):
         min_load = fatigue_data.load.min()
         max_load = fatigue_data.load.max()
         sd_bounds = (min_load * 0.5, max_load * 2.0)
-        avg_sd = (min_load + max_load) / 2
-        
-        fatigue_data.avg_sd = avg_sd
         
         print(f"Data loaded successfully!")
         print(f"Total data points: {len(df_prepared)}")
         print(f"Load range: {min_load:.1f} to {max_load:.1f}")
         print(f"Calculated SD bounds: {sd_bounds}")
-        print(f"Average SD: {avg_sd:.1f}")
         
         
         # Initialize global results dictionary only if new dataset
@@ -398,8 +397,6 @@ def run_maxlikefull_analysis(fatigue_data, ts_bounds=None):
     return results_dict
 
 
-# %% Method 4: Nelder-Mead Analysis with minimize + likelihood override
-
 # %% Method 4: Nelder-Mead with std_log
 
 # Custom Likelihood class to work with std_log directly
@@ -426,9 +423,11 @@ def run_nelder_mead_stdlog_analysis(fatigue_data):
     # Create custom likelihood object
     custom_lh = StdLogLikelihood(fatigue_data)
     
-    # Initial values
-    initial_sd = fatigue_data.avg_sd  # Use avg_sd as starting point
-    initial_std_log = 1.0            # Start with slog=1 as requested
+    # Calculate avg_sd
+    min_load = fatigue_data.load.min()
+    max_load = fatigue_data.load.max()
+    initial_sd = (min_load + max_load) / 2
+    initial_std_log = 1.0
     
     print(f"Using Nelder-Mead with std_log - Initial SD: {initial_sd:.2f}, Initial std_log: {initial_std_log:.2f}")
     
@@ -450,7 +449,7 @@ def run_nelder_mead_stdlog_analysis(fatigue_data):
             'TS': ts_value,  # Calculate equivalent TS
             'Likelihood': likelihood
         })
-        
+        print(likelihood)
         return -likelihood
     
     # Run Nelder-Mead optimization using minimize()
@@ -513,6 +512,151 @@ def run_nelder_mead_stdlog_analysis(fatigue_data):
     print(f"ND: {final_nd:.0f}")
     print(f"Status: {status_message}")
     print(f"Iterations: {result.nit if hasattr(result, 'nit') else 'N/A'}")
+    
+    return results_dict
+
+
+# %% Method 5: Direct Lognormal with Nelder-Mead
+def run_direct_lognormal_analysis(fatigue_data):
+    """
+    Run optimization using direct lognormal approach with Nelder-Mead
+    Based on colleague's implementation
+    """
+    # Get original dataframe
+    df = fatigue_data._obj
+    
+    # Step 1: Separate failures and runouts using censor field
+    failure_data = df[df['censor'] == 1]
+    failure = failure_data['load'].tolist()  # Note: using 'load' not 'loads'
+    
+    runout_data = df[df['censor'] == 0]
+    runout = runout_data['load'].tolist()
+    
+    # Calculate initial values
+    if len(failure) > 0 and len(runout) > 0:
+        max_val = np.log(max(failure))
+        min_val = np.log(min(runout))
+        avg = (max_val + min_val) / 2
+    else:
+        # Fallback if either group is empty
+        all_loads = df['load'].tolist()
+        max_val = np.log(max(all_loads))
+        min_val = np.log(min(all_loads))
+        avg = (max_val + min_val) / 2
+    
+    n1 = len(failure)
+    n2 = len(runout)
+    
+    print(f"Data summary: {n1} failures, {n2} runouts")
+    print(f"Initial mu: {avg:.4f} (avg of log values)")
+    
+    # Setup optimization tracking
+    optimization_steps = []
+    
+    # Step 2: Define the likelihood function
+    def negative_log_likelihood(params):
+        # Unpack the parameters
+        mu, sigma = params
+        
+        # Calculate the negative log-likelihood
+        if len(failure) > 0 and len(runout) > 0:
+            nll = -(np.sum(np.log(stats.lognorm.cdf(failure, s=sigma, loc=0, scale=np.exp(mu)))) + 
+                    np.sum(np.log(1 - stats.lognorm.cdf(runout, s=sigma, loc=0, scale=np.exp(mu)))))
+        elif len(failure) > 0:
+            nll = -np.sum(np.log(stats.lognorm.cdf(failure, s=sigma, loc=0, scale=np.exp(mu))))
+        elif len(runout) > 0:
+            nll = -np.sum(np.log(1 - stats.lognorm.cdf(runout, s=sigma, loc=0, scale=np.exp(mu))))
+        else:
+            return np.inf
+        
+        # Convert parameters to SD and TS for tracking
+        SD_value = np.exp(mu)
+        TS_value = np.exp(2.5631 * sigma * 0.43429448)  # Converting to TS format
+        
+        # Track step
+        optimization_steps.append({
+            'Step': len(optimization_steps) + 1,
+            'mu': mu,
+            'sigma': sigma,
+            'SD': SD_value,
+            'TS': TS_value,
+            'Likelihood': -nll  # Store positive likelihood for consistency
+        })
+        
+        return nll
+    
+    # Step 3: Initial parameters
+    initial_params = [avg, 1]  # Initial guess for mu (log of scale) and sigma
+    
+    # Step 4: Optimize parameters
+    result = optimize.minimize(
+        negative_log_likelihood, 
+        initial_params,
+        method='Nelder-Mead',
+        options={'disp': True}
+    )
+    
+    # Extract optimized parameters
+    optimized_mu, optimized_sigma_ln = result.x
+    optimized_sigma = 0.43429448 * optimized_sigma_ln  # Convert to base-10 log
+    
+    # The actual scale parameter of lognormal is given by exp(mu)
+    optimized_scale = np.exp(optimized_mu)
+    
+    # Convert to TS format for compatibility
+    final_sd = optimized_scale
+    final_ts = np.exp(2.5631 * optimized_sigma)
+    
+    # Calculate ND using Elementary parameters (consistent with other methods)
+    elementary_analyzer = woehler.Elementary(fatigue_data)
+    elementary_result = elementary_analyzer.analyze()
+    
+    # Calculate ND using transition_cycles approach
+    slope = elementary_result.k_1
+    lg_intercept = np.log10(elementary_result.ND) - (-slope) * np.log10(elementary_result.SD)
+    final_nd = 10**(lg_intercept + (-slope) * np.log10(final_sd))
+    
+    # Create a Series for compatibility with other methods
+    result_series = pd.Series({
+        'SD': final_sd,
+        'TS': final_ts,
+        'ND': final_nd,
+        'k_1': slope,
+        'TN': elementary_result.TN,
+        'mu': optimized_mu,
+        'sigma': optimized_sigma
+    })
+    
+    # Get optimization metadata
+    status_message = f"Success: {result.success}, Message: {result.message}"
+    
+    # Prepare results dictionary
+    results_dict = {
+        'Method': 'Direct-Lognormal',
+        'SD': final_sd,
+        'TS': final_ts,
+        'mu': optimized_mu,
+        'sigma': optimized_sigma,
+        'slog': optimized_sigma,  # Store as slog for compatibility
+        'ND': final_nd,
+        'k_1': slope,
+        'TN': elementary_result.TN,
+        'optimization_success': result.success,
+        'status_message': status_message,
+        'iterations': result.nit if hasattr(result, 'nit') else None,
+        'function_evaluations': result.nfev,
+        'optimization_steps': optimization_steps,
+        'result_object': result_series
+    }
+    
+    # Print summary
+    print("\nDirect-Lognormal Results:")
+    print(f"mu: {optimized_mu:.4f}")
+    print(f"sigma: {optimized_sigma:.4f}")
+    print(f"SD (scale): {final_sd:.2f}")
+    print(f"TS: {final_ts:.2f}")
+    print(f"ND: {final_nd:.0f}")
+    print(f"Status: {status_message}")
     
     return results_dict
 
@@ -587,6 +731,42 @@ def display_convergence_plot(optimization_steps, method_name):
     
     fig.update_layout(title=f'{method_name} Convergence', height=400, showlegend=False)
     fig.show()
+    
+def display_likelihood_plot(optimization_steps, method_name):
+    """Display likelihood convergence plot"""
+    df_steps = pd.DataFrame(optimization_steps)
+    
+    fig = go.Figure()
+    
+    # Plot likelihood values
+    fig.add_trace(go.Scatter(
+        x=df_steps['Step'],
+        y=df_steps['Likelihood'],
+        mode='lines+markers',
+        name='Log-Likelihood'
+    ))
+
+    # Format the plot
+    fig.update_layout(
+        title=f'{method_name} Likelihood Convergence',
+        xaxis_title='Optimization Step',
+        yaxis_title='Log-Likelihood Value',
+        width=800,
+        height=500
+    )
+    
+    # Add annotation explaining what higher values mean
+    fig.add_annotation(
+        x=0.95, y=0.05,
+        xref="paper", yref="paper",
+        text="Higher values = better fit",
+        showarrow=False,
+        font=dict(size=12, color="green"),
+        align="right"
+    )
+    
+    fig.show()
+    return fig
 
     
 # %% Save Results to File
@@ -766,7 +946,7 @@ def compile_results_to_excel(analysis_results, filename=None, output_base_dir=OU
 
 # %% File Selection, Data Loading
 # Update these settings and run this block
-DATASET_PATH = "All Data/4PB_7.xlsx"  # Update this path
+DATASET_PATH = "All Data/4PB_2.xlsx"  # Update this path
 NG = 5000000                          # Update if needed
 
 # Load and prepare data
@@ -783,7 +963,8 @@ if fatigue_data is not None:
     # METHOD_TO_RUN = "MaxLikeInf"
     # METHOD_TO_RUN = "L-BFGS-B"
     # METHOD_TO_RUN = "MaxLikeFull"
-    METHOD_TO_RUN = "Nelder-Mead-StdLog"
+    # METHOD_TO_RUN = "Nelder-Mead-StdLog"
+    METHOD_TO_RUN = "Direct-Lognormal"
 
     # Run selected analysis
     if METHOD_TO_RUN == "MaxLikeInf":
@@ -799,6 +980,9 @@ if fatigue_data is not None:
         
     elif METHOD_TO_RUN == "Nelder-Mead-StdLog":
         method_results = run_nelder_mead_stdlog_analysis(fatigue_data)
+        
+    elif METHOD_TO_RUN == "Lognormal":
+        method_results = run_direct_lognormal_analysis(fatigue_data)
         
     else:
         print(f"Unknown method: {METHOD_TO_RUN}")
@@ -821,6 +1005,7 @@ if fatigue_data is not None:
         # Display SN curve and convergence plot
         display_sn_curve(fatigue_data, method_results['result_object'], method_results['Method'])
         display_convergence_plot(method_results['optimization_steps'], method_results['Method'])
+        display_likelihood_plot(method_results['optimization_steps'], method_results['Method'])
         
         print(f"\nAnalysis complete. Results ready for saving.")
     else:
@@ -858,8 +1043,8 @@ for method_name, results in ANALYSIS_RESULTS.items():
     
 # %% Run All Methods - Complete Analysis and Save
 # Update dataset path and run this block to analyze with all methods
-DATASET_PATH = "All Data/NO35_gekerbt.xlsx"  # Update this path
-NG = 4000000                          # Update if needed
+DATASET_PATH = "All Data/Doosan_M4.xlsx"
+NG = 5000000
 
 # Load and prepare data
 print("=== Loading Dataset ===")
@@ -870,7 +1055,7 @@ if fatigue_data is not None:
     SD_BOUNDS = calculated_sd_bounds
     
     # List of methods to run
-    methods_to_run = ["MaxLikeInf", "L-BFGS-B", "MaxLikeFull"]
+    methods_to_run = ["MaxLikeInf", "Lognormal"]
     
     print(f"\n=== Running All Methods ===")
     for method_name in methods_to_run:
@@ -887,6 +1072,9 @@ if fatigue_data is not None:
         elif method_name == "MaxLikeFull":
             # Uses Huck's TS by default  
             method_results = run_maxlikefull_analysis(fatigue_data)
+            
+        elif method_name == "Lognormal":
+            method_results = run_direct_lognormal_analysis(fatigue_data)
         
         # Store in global results dictionary
         ANALYSIS_RESULTS[method_results['Method']] = method_results
