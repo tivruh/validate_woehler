@@ -48,8 +48,8 @@ print(f"Output directory: {OUTPUT_BASE_DIR}")
 
 
 # %% Data Loading and Preparation
-def load_and_prepare_data(file_path, ng):
-    """Load fatigue data and prepare for analysis"""
+def load_and_prepare_data(file_path):
+    """Load fatigue data and auto-detect NG from censor column"""
     try:
         # Load data
         df_test = pd.read_excel(file_path, sheet_name='Data')
@@ -58,7 +58,18 @@ def load_and_prepare_data(file_path, ng):
         if 'loads' in df_test.columns:
             df_test = df_test.rename(columns={'loads': 'load'})
         
-        # Prepare data for PyLife
+        # Auto-detect NG from survivors (censor = 0)
+        survivors = df_test[df_test['censor'] == 0]
+        if not survivors.empty:
+            ng_raw = int(survivors['cycles'].max())  # Raw highest survivor cycle
+            ng = (ng_raw // 1000) * 1000  # Round down to nearest 1000
+            print(f"Auto-detected NG: {ng_raw:,} → {ng:,} cycles (rounded down to nearest 1000)")
+        else:
+            ng_raw = int(df_test['cycles'].max())  # Fallback: use max cycles if no survivors
+            ng = (ng_raw // 1000) * 1000  # Round down to nearest 1000
+            print(f"No survivors found. Using max cycles: {ng_raw:,} → {ng:,} cycles (rounded down to nearest 1000)")
+        
+        # Rest of function remains the same...
         df_prepared = df_test[['load', 'cycles', 'censor']].copy()
         df_prepared = woehler.determine_fractures(df_prepared, ng)
         fatigue_data = df_prepared.fatigue_data
@@ -71,8 +82,6 @@ def load_and_prepare_data(file_path, ng):
         print(f"Data loaded successfully!")
         print(f"Total data points: {len(df_prepared)}")
         print(f"Load range: {min_load:.1f} to {max_load:.1f}")
-        print(f"Calculated SD bounds: {sd_bounds}")
-        
         
         # Initialize global results dictionary only if new dataset
         global ANALYSIS_RESULTS
@@ -961,13 +970,70 @@ def compile_results_to_excel(analysis_results, filename=None, output_base_dir=OU
         return None
 
 
+# %% Batch Processing Functions
+
+def process_single_dataset_lognormal(file_path):
+    """Process single dataset with lognormal method only"""
+    print(f"\n=== Processing {os.path.basename(file_path)} ===")
+    
+    try:
+        # Load and prepare data (auto-detect NG)
+        fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(file_path)
+        
+        if fatigue_data is not None:
+            # Run only lognormal analysis
+            lognormal_results = run_direct_lognormal_analysis(fatigue_data)
+            
+            # Add dataset metadata
+            lognormal_results['dataset_name'] = os.path.basename(file_path).replace('.xlsx', '')
+            lognormal_results['file_path'] = file_path
+            
+            print(f"✅ {os.path.basename(file_path)}: SD={lognormal_results['SD']:.2f}")
+            return lognormal_results
+        else:
+            print(f"❌ Failed to load data from {os.path.basename(file_path)}")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Error processing {os.path.basename(file_path)}: {e}")
+        return None
+
+def batch_process_all_datasets(data_directory="All Data"):
+    """Process all Excel files in directory and return consolidated results"""
+    
+    print(f"=== Batch Processing All Datasets from '{data_directory}' ===")
+    
+    # Find all Excel files
+    if not os.path.exists(data_directory):
+        print(f"Directory '{data_directory}' not found!")
+        return []
+        
+    excel_files = [f for f in os.listdir(data_directory) 
+                   if f.endswith('.xlsx') and not f.startswith('~$')]
+    
+    print(f"Found {len(excel_files)} Excel files: {excel_files}")
+    
+    batch_results = []
+    
+    for file_name in excel_files:
+        file_path = os.path.join(data_directory, file_name)
+        result = process_single_dataset_lognormal(file_path)
+        
+        if result is not None:
+            batch_results.append(result)
+    
+    print(f"\n=== Batch Processing Complete ===")
+    print(f"Successfully processed: {len(batch_results)}/{len(excel_files)} datasets")
+    
+    return batch_results
+
+
 # %% File Selection, Data Loading
 # Update these settings and run this block
 DATASET_PATH = "All Data/4PB_2.xlsx"  # Update this path
-NG = 5000000                          # Update if needed
 
 # Load and prepare data
-fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(DATASET_PATH, NG)
+fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(DATASET_PATH)
 
 # %% Select Method, run Analysis
 
@@ -1065,7 +1131,7 @@ NG = 5000000
 
 # Load and prepare data
 print("=== Loading Dataset ===")
-fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(DATASET_PATH, NG)
+fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(DATASET_PATH)
 
 if fatigue_data is not None:
     # Update global SD_BOUNDS for optimization methods
@@ -1115,4 +1181,24 @@ if fatigue_data is not None:
     
 else:
     print("Failed to load data. Check file path and format.")
+
+
+# %% Batch Process All Datasets - NEW MAIN EXECUTION
+DATA_DIRECTORY = "All Data"  # Update this path if needed
+
+# Run batch processing
+batch_results = batch_process_all_datasets(DATA_DIRECTORY)
+
+if batch_results:
+    print(f"\n=== Results Summary ===")
+    for result in batch_results:
+        dataset = result['dataset_name']
+        sd = result['SD']
+        ts = result['TS']
+        success = result['optimization_success']
+        status = "✅" if success else "❌"
+        print(f"{status} {dataset}: SD={sd:.2f}, TS={ts:.3f}")
+else:
+    print("No datasets processed successfully.")
+
 # %%
