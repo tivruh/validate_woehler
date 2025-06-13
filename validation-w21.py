@@ -227,296 +227,297 @@ def run_maxlike_analysis(fatigue_data):
     return results_dict
 
 
-# %% Method 2: L-BFGS-B Analysis
-def run_lbfgsb_analysis(fatigue_data, ts_bounds=None):
-    """Run L-BFGS-B analysis with optional TS bounds or Huck's TS as default"""
+# # %% Method 2: L-BFGS-B Analysis
+# def run_lbfgsb_analysis(fatigue_data, ts_bounds=None):
+#     """Run L-BFGS-B analysis with optional TS bounds or Huck's TS as default"""
     
-    # Determine TS handling approach
-    if ts_bounds is None:
-        # Use Huck's method for deterministic TS
-        print("No TS bounds provided. Using Huck's method for deterministic TS...")
-        huck_analyzer = HuckMethod(fatigue_data)
-        huck_result = huck_analyzer.analyze()
-        fixed_ts = huck_result.TS
-        print(f"Huck's TS: {fixed_ts:.4f}")
+#     # Determine TS handling approach
+#     if ts_bounds is None:
+#         # Use Huck's method for deterministic TS
+#         print("No TS bounds provided. Using Huck's method for deterministic TS...")
+#         huck_analyzer = HuckMethod(fatigue_data)
+#         huck_result = huck_analyzer.analyze()
+#         fixed_ts = huck_result.TS
+#         print(f"Huck's TS: {fixed_ts:.4f}")
         
-        # Optimization setup: only optimize SD
-        optimization_steps = []
-        lh = Likelihood(fatigue_data)
+#         # Optimization setup: only optimize SD
+#         optimization_steps = []
+#         lh = Likelihood(fatigue_data)
         
-        def objective_function_fixed_ts(sd_array):
-            sd = sd_array[0]
-            likelihood = lh.likelihood_infinite(sd, fixed_ts)
-            optimization_steps.append({
-                'Step': len(optimization_steps) + 1,
-                'SD': sd,
-                'TS': fixed_ts,
-                'Likelihood': likelihood
-            })
-            return -likelihood
+#         def objective_function_fixed_ts(sd_array):
+#             sd = sd_array[0]
+#             likelihood = lh.likelihood_infinite(sd, fixed_ts)
+#             optimization_steps.append({
+#                 'Step': len(optimization_steps) + 1,
+#                 'SD': sd,
+#                 'TS': fixed_ts,
+#                 'Likelihood': likelihood
+#             })
+#             return -likelihood
         
-        # Run optimization with only SD bounds
-        sd_bounds = [(SD_BOUNDS[0], SD_BOUNDS[1])]
-        initial_sd = fatigue_data.fatigue_limit
+#         # Run optimization with only SD bounds
+#         sd_bounds = [(SD_BOUNDS[0], SD_BOUNDS[1])]
+#         initial_sd = fatigue_data.fatigue_limit
         
-        result = optimize.minimize(
-            objective_function_fixed_ts,
-            [initial_sd],
-            method='L-BFGS-B',
-            bounds=sd_bounds
-        )
+#         result = optimize.minimize(
+#             objective_function_fixed_ts,
+#             [initial_sd],
+#             method='L-BFGS-B',
+#             bounds=sd_bounds
+#         )
         
-        final_sd = result.x[0]
-        final_ts = fixed_ts
-        ts_source = "Huck"
+#         final_sd = result.x[0]
+#         final_ts = fixed_ts
+#         ts_source = "Huck"
         
-    else:
-        # Optimize both SD and TS within provided bounds
-        print(f"Using manual TS bounds: {ts_bounds}")
+#     else:
+#         # Optimize both SD and TS within provided bounds
+#         print(f"Using manual TS bounds: {ts_bounds}")
         
-        # Optimization setup: optimize both SD and TS
-        optimization_steps = []
-        lh = Likelihood(fatigue_data)
+#         # Optimization setup: optimize both SD and TS
+#         optimization_steps = []
+#         lh = Likelihood(fatigue_data)
         
-        def objective_function_both(params):
-            sd, ts = params
-            likelihood = lh.likelihood_infinite(sd, ts)
-            optimization_steps.append({
-                'Step': len(optimization_steps) + 1,
-                'SD': sd,
-                'TS': ts,
-                'Likelihood': likelihood
-            })
-            return -likelihood
+#         def objective_function_both(params):
+#             sd, ts = params
+#             likelihood = lh.likelihood_infinite(sd, ts)
+#             optimization_steps.append({
+#                 'Step': len(optimization_steps) + 1,
+#                 'SD': sd,
+#                 'TS': ts,
+#                 'Likelihood': likelihood
+#             })
+#             return -likelihood
         
-        # Set up bounds for both parameters
-        bounds = [SD_BOUNDS, ts_bounds]
-        initial_params = [fatigue_data.fatigue_limit, 1.2]
+#         # Set up bounds for both parameters
+#         bounds = [SD_BOUNDS, ts_bounds]
+#         initial_params = [fatigue_data.fatigue_limit, 1.2]
         
-        result = optimize.minimize(
-            objective_function_both,
-            initial_params,
-            method='L-BFGS-B',
-            bounds=bounds
-        )
+#         result = optimize.minimize(
+#             objective_function_both,
+#             initial_params,
+#             method='L-BFGS-B',
+#             bounds=bounds
+#         )
         
-        final_sd, final_ts = result.x
-        ts_source = "Manual"
+#         final_sd, final_ts = result.x
+#         ts_source = "Manual"
     
-    # Calculate additional parameters
-    slog = np.log10(final_ts) / 2.5361
+#     # Calculate additional parameters
+#     slog = np.log10(final_ts) / 2.5361
     
-    # Recalculate ND using optimized SD (consistent with MaxLikeInf approach)
-    # Need to get Elementary result for slope calculation
-    elementary_analyzer = woehler.Elementary(fatigue_data)
-    elementary_result = elementary_analyzer.analyze()
+#     # Recalculate ND using optimized SD (consistent with MaxLikeInf approach)
+#     # Need to get Elementary result for slope calculation
+#     elementary_analyzer = woehler.Elementary(fatigue_data)
+#     elementary_result = elementary_analyzer.analyze()
     
-    # Calculate ND using the transition_cycles method approach
-    slope = elementary_result.k_1
-    # Using the same formula as in elementary.py _transition_cycles
-    lg_intercept = np.log10(elementary_result.ND) - (-slope) * np.log10(elementary_result.SD)
-    final_nd = 10**(lg_intercept + (-slope) * np.log10(final_sd))
+#     # Calculate ND using the transition_cycles method approach
+#     slope = elementary_result.k_1
+#     # Using the same formula as in elementary.py _transition_cycles
+#     lg_intercept = np.log10(elementary_result.ND) - (-slope) * np.log10(elementary_result.SD)
+#     final_nd = 10**(lg_intercept + (-slope) * np.log10(final_sd))
     
-    # Get optimization status message
-    status_msg = "Success" if result.success else f"Failed: {result.message}"
+#     # Get optimization status message
+#     status_msg = "Success" if result.success else f"Failed: {result.message}"
     
-    # Prepare results dictionary
-    results_dict = {
-        'Method': 'L-BFGS-B',  # Consistent method name
-        'SD': final_sd,
-        'TS': final_ts,
-        'slog': slog,
-        'ND': final_nd,
-        'k_1': slope,
-        'TN': elementary_result.TN,
-        'optimization_success': result.success,
-        'status_message': status_msg,
-        'iterations': len(optimization_steps),
-        'function_evaluations': result.nfev if hasattr(result, 'nfev') else 'N/A',
-        'optimization_steps': optimization_steps,
-        'ts_source': ts_source,  # Track whether TS from Huck or Manual
-        'result_object': pd.Series({
-            'SD': final_sd, 'TS': final_ts, 'ND': final_nd, 
-            'k_1': slope, 'TN': elementary_result.TN
-        })
-    }
+#     # Prepare results dictionary
+#     results_dict = {
+#         'Method': 'L-BFGS-B',  # Consistent method name
+#         'SD': final_sd,
+#         'TS': final_ts,
+#         'slog': slog,
+#         'ND': final_nd,
+#         'k_1': slope,
+#         'TN': elementary_result.TN,
+#         'optimization_success': result.success,
+#         'status_message': status_msg,
+#         'iterations': len(optimization_steps),
+#         'function_evaluations': result.nfev if hasattr(result, 'nfev') else 'N/A',
+#         'optimization_steps': optimization_steps,
+#         'ts_source': ts_source,  # Track whether TS from Huck or Manual
+#         'result_object': pd.Series({
+#             'SD': final_sd, 'TS': final_ts, 'ND': final_nd, 
+#             'k_1': slope, 'TN': elementary_result.TN
+#         })
+#     }
     
-    return results_dict
+#     return results_dict
 
 
-# %% Method 3: MaxLikeFull Analysis  
-def run_maxlikefull_analysis(fatigue_data, ts_bounds=None):
-    """Run MaxLikeFull analysis with optional TS bounds or Huck's TS as default"""
+# # %% Method 3: MaxLikeFull Analysis  
+# def run_maxlikefull_analysis(fatigue_data, ts_bounds=None):
+#     """Run MaxLikeFull analysis with optional TS bounds or Huck's TS as default"""
     
-    # Determine TS handling approach
-    if ts_bounds is None:
-        # Use Huck's method for deterministic TS
-        print("No TS bounds provided. Using Huck's method for deterministic TS...")
-        huck_analyzer = HuckMethod(fatigue_data)
-        huck_result = huck_analyzer.analyze()
-        fixed_ts = huck_result.TS
-        print(f"Huck's TS: {fixed_ts:.4f}")
+#     # Determine TS handling approach
+#     if ts_bounds is None:
+#         # Use Huck's method for deterministic TS
+#         print("No TS bounds provided. Using Huck's method for deterministic TS...")
+#         huck_analyzer = HuckMethod(fatigue_data)
+#         huck_result = huck_analyzer.analyze()
+#         fixed_ts = huck_result.TS
+#         print(f"Huck's TS: {fixed_ts:.4f}")
         
-        # Run MaxLikeFull with fixed TS
-        analyzer = woehler.MaxLikeFull(fatigue_data)
-        result = analyzer.analyze(fixed_parameters={'TS': fixed_ts})
-        ts_source = "Huck"
+#         # Run MaxLikeFull with fixed TS
+#         analyzer = woehler.MaxLikeFull(fatigue_data)
+#         result = analyzer.analyze(fixed_parameters={'TS': fixed_ts})
+#         ts_source = "Huck"
         
-    else:
-        # Let MaxLikeFull optimize both SD and TS within bounds
-        print(f"Using manual TS bounds: {ts_bounds}")
-        print("Note: MaxLikeFull doesn't directly support TS bounds - optimizing freely")
+#     else:
+#         # Let MaxLikeFull optimize both SD and TS within bounds
+#         print(f"Using manual TS bounds: {ts_bounds}")
+#         print("Note: MaxLikeFull doesn't directly support TS bounds - optimizing freely")
         
-        # Run standard MaxLikeFull (optimizes all parameters)
-        analyzer = woehler.MaxLikeFull(fatigue_data)
-        result = analyzer.analyze()
-        ts_source = "Manual"
+#         # Run standard MaxLikeFull (optimizes all parameters)
+#         analyzer = woehler.MaxLikeFull(fatigue_data)
+#         result = analyzer.analyze()
+#         ts_source = "Manual"
     
-    # Calculate slog
-    slog = np.log10(result.TS) / 2.5361
+#     # Calculate slog
+#     slog = np.log10(result.TS) / 2.5361
     
-    # Get status message
-    status_msg = "Success"  # MaxLikeFull doesn't return detailed status
+#     # Get status message
+#     status_msg = "Success"  # MaxLikeFull doesn't return detailed status
     
-    # Prepare results dictionary
-    results_dict = {
-        'Method': 'MaxLikeFull',  # Consistent method name
-        'SD': result.SD,
-        'TS': result.TS,
-        'slog': slog,
-        'ND': result.ND,
-        'k_1': result.k_1,
-        'TN': result.TN,
-        'status_message': status_msg,
-        'iterations': 'N/A',  # No tracking available
-        'optimization_steps': [],  # Empty for compatibility
-        'ts_source': ts_source,  # Track whether TS from Huck or Manual
-        'result_object': result
-    }
+#     # Prepare results dictionary
+#     results_dict = {
+#         'Method': 'MaxLikeFull',  # Consistent method name
+#         'SD': result.SD,
+#         'TS': result.TS,
+#         'slog': slog,
+#         'ND': result.ND,
+#         'k_1': result.k_1,
+#         'TN': result.TN,
+#         'status_message': status_msg,
+#         'iterations': 'N/A',  # No tracking available
+#         'optimization_steps': [],  # Empty for compatibility
+#         'ts_source': ts_source,  # Track whether TS from Huck or Manual
+#         'result_object': result
+#     }
     
-    return results_dict
+#     return results_dict
 
 
-# %% Method 4: Nelder-Mead with std_log
+# # %% Method 4: Nelder-Mead with std_log
 
-# Custom Likelihood class to work with std_log directly
-class StdLogLikelihood(Likelihood):
-    """Custom Likelihood class that works with std_log instead of TS"""
+# # Custom Likelihood class to work with std_log directly
+# class StdLogLikelihood(Likelihood):
+#     """Custom Likelihood class that works with std_log instead of TS"""
     
-    def __init__(self, fatigue_data):
-        super().__init__(fatigue_data)
+#     def __init__(self, fatigue_data):
+#         super().__init__(fatigue_data)
     
-    def likelihood_infinite(self, SD, std_log):
-        """Override to work with std_log directly instead of TS"""
-        infinite_zone = self._fd.infinite_zone
-        t = np.logical_not(self._fd.infinite_zone.fracture).astype(np.float64)
-        likelihood = stats.norm.cdf(np.log10(infinite_zone.load/SD), scale=abs(std_log))
-        non_log_likelihood = t+(1.-2.*t)*likelihood
-        if non_log_likelihood.eq(0.0).any():
-            return -np.inf
+#     def likelihood_infinite(self, SD, std_log):
+#         """Override to work with std_log directly instead of TS"""
+#         infinite_zone = self._fd.infinite_zone
+#         t = np.logical_not(self._fd.infinite_zone.fracture).astype(np.float64)
+#         likelihood = stats.norm.cdf(np.log10(infinite_zone.load/SD), scale=abs(std_log))
+#         non_log_likelihood = t+(1.-2.*t)*likelihood
+#         if non_log_likelihood.eq(0.0).any():
+#             return -np.inf
 
-        return np.log(non_log_likelihood).sum()
+#         return np.log(non_log_likelihood).sum()
 
-def run_nelder_mead_stdlog_analysis(fatigue_data):
-    """Run Nelder-Mead analysis using std_log instead of TS"""
+# def run_nelder_mead_stdlog_analysis(fatigue_data):
+#     """Run Nelder-Mead analysis using std_log instead of TS"""
     
-    # Create custom likelihood object
-    custom_lh = StdLogLikelihood(fatigue_data)
+#     # Create custom likelihood object
+#     custom_lh = StdLogLikelihood(fatigue_data)
     
-    # Calculate avg_sd
-    min_load = fatigue_data.load.min()
-    max_load = fatigue_data.load.max()
-    initial_sd = (min_load + max_load) / 2
-    initial_std_log = 1.0
+#     # Calculate avg_sd
+#     min_load = fatigue_data.load.min()
+#     max_load = fatigue_data.load.max()
+#     initial_sd = (min_load + max_load) / 2
+#     initial_std_log = 1.0
     
-    print(f"Using Nelder-Mead with std_log - Initial SD: {initial_sd:.2f}, Initial std_log: {initial_std_log:.2f}")
+#     print(f"Using Nelder-Mead with std_log - Initial SD: {initial_sd:.2f}, Initial std_log: {initial_std_log:.2f}")
     
-    # Setup optimization tracking
-    optimization_steps = []
+#     # Setup optimization tracking
+#     optimization_steps = []
     
-    # Define objective function with tracking
-    def tracked_objective(params):
-        sd, std_log = params
-        likelihood = custom_lh.likelihood_infinite(sd, std_log)
+#     # Define objective function with tracking
+#     def tracked_objective(params):
+#         sd, std_log = params
+#         likelihood = custom_lh.likelihood_infinite(sd, std_log)
         
-        # Convert std_log to TS for tracking and later comparison
-        ts_value = 10**(2.5361 * std_log)
+#         # Convert std_log to TS for tracking and later comparison
+#         ts_value = 10**(2.5361 * std_log)
         
-        optimization_steps.append({
-            'Step': len(optimization_steps) + 1,
-            'SD': sd,
-            'std_log': std_log,
-            'TS': ts_value,  # Calculate equivalent TS
-            'Likelihood': likelihood
-        })
-        print(likelihood)
-        return -likelihood
+#         optimization_steps.append({
+#             'Step': len(optimization_steps) + 1,
+#             'SD': sd,
+#             'std_log': std_log,
+#             'TS': ts_value,  # Calculate equivalent TS
+#             'Likelihood': likelihood
+#         })
+#         print(likelihood)
+#         return -likelihood
     
-    # Run Nelder-Mead optimization using minimize()
-    initial_params = [initial_sd, initial_std_log]
-    result = optimize.minimize(
-        tracked_objective,
-        initial_params,
-        method='Nelder-Mead',
-        options={'disp': False}  # Set to True for detailed output
-    )
+#     # Run Nelder-Mead optimization using minimize()
+#     initial_params = [initial_sd, initial_std_log]
+#     result = optimize.minimize(
+#         tracked_objective,
+#         initial_params,
+#         method='Nelder-Mead',
+#         options={'disp': False}  # Set to True for detailed output
+#     )
     
-    # Extract results
-    final_sd = result.x[0]
-    final_std_log = result.x[1]
-    final_ts = 10**(2.5361 * final_std_log)  # Convert to TS for compatibility
+#     # Extract results
+#     final_sd = result.x[0]
+#     final_std_log = result.x[1]
+#     final_ts = 10**(2.5361 * final_std_log)  # Convert to TS for compatibility
     
-    # Calculate ND using Elementary parameters
-    elementary_analyzer = woehler.Elementary(fatigue_data)
-    elementary_result = elementary_analyzer.analyze()
+#     # Calculate ND using Elementary parameters
+#     elementary_analyzer = woehler.Elementary(fatigue_data)
+#     elementary_result = elementary_analyzer.analyze()
     
-    # Calculate ND using transition_cycles approach
-    slope = elementary_result.k_1
-    lg_intercept = np.log10(elementary_result.ND) - (-slope) * np.log10(elementary_result.SD)
-    final_nd = 10**(lg_intercept + (-slope) * np.log10(final_sd))
+#     # Calculate ND using transition_cycles approach
+#     slope = elementary_result.k_1
+#     lg_intercept = np.log10(elementary_result.ND) - (-slope) * np.log10(elementary_result.SD)
+#     final_nd = 10**(lg_intercept + (-slope) * np.log10(final_sd))
     
-    # Create a Series for compatibility with other methods
-    result_series = pd.Series({
-        'SD': final_sd,
-        'TS': final_ts,
-        'ND': final_nd,
-        'k_1': slope,
-        'TN': elementary_result.TN,
-        'slog': final_std_log  # Store the optimized std_log
-    })
+#     # Create a Series for compatibility with other methods
+#     result_series = pd.Series({
+#         'SD': final_sd,
+#         'TS': final_ts,
+#         'ND': final_nd,
+#         'k_1': slope,
+#         'TN': elementary_result.TN,
+#         'slog': final_std_log  # Store the optimized std_log
+#     })
     
-    # Get optimization metadata
-    status_message = f"Success: {result.success}, Message: {result.message}"
+#     # Get optimization metadata
+#     status_message = f"Success: {result.success}, Message: {result.message}"
     
-    # Prepare results dictionary
-    results_dict = {
-        'Method': 'Nelder-Mead-StdLog',
-        'SD': final_sd,
-        'TS': final_ts,
-        'slog': final_std_log,
-        'ND': final_nd,
-        'k_1': slope,
-        'TN': elementary_result.TN,
-        'optimization_success': result.success,
-        'status_message': status_message,
-        'iterations': result.nit if hasattr(result, 'nit') else None,
-        'function_evaluations': result.nfev,
-        'optimization_steps': optimization_steps,
-        'result_object': result_series  # Store for plotting
-    }
+#     # Prepare results dictionary
+#     results_dict = {
+#         'Method': 'Nelder-Mead-StdLog',
+#         'SD': final_sd,
+#         'TS': final_ts,
+#         'slog': final_std_log,
+#         'ND': final_nd,
+#         'k_1': slope,
+#         'TN': elementary_result.TN,
+#         'optimization_success': result.success,
+#         'status_message': status_message,
+#         'iterations': result.nit if hasattr(result, 'nit') else None,
+#         'function_evaluations': result.nfev,
+#         'optimization_steps': optimization_steps,
+#         'result_object': result_series  # Store for plotting
+#     }
     
-    # Print summary
-    print("\nNelder-Mead-StdLog Results:")
-    print(f"SD: {final_sd:.2f}")
-    print(f"std_log: {final_std_log:.4f} (equivalent TS: {final_ts:.2f})")
-    print(f"ND: {final_nd:.0f}")
-    print(f"Status: {status_message}")
-    print(f"Iterations: {result.nit if hasattr(result, 'nit') else 'N/A'}")
+#     # Print summary
+#     print("\nNelder-Mead-StdLog Results:")
+#     print(f"SD: {final_sd:.2f}")
+#     print(f"std_log: {final_std_log:.4f} (equivalent TS: {final_ts:.2f})")
+#     print(f"ND: {final_nd:.0f}")
+#     print(f"Status: {status_message}")
+#     print(f"Iterations: {result.nit if hasattr(result, 'nit') else 'N/A'}")
     
-    return results_dict
+#     return results_dict
 
 
 # %% Method 5: Direct Lognormal with Nelder-Mead
+
 def run_direct_lognormal_analysis(fatigue_data):
     """
     Run optimization using direct lognormal approach with Nelder-Mead
@@ -608,20 +609,36 @@ def run_direct_lognormal_analysis(fatigue_data):
     final_ts = np.exp(2.5631 * optimized_sigma)
     
     # Calculate ND using Elementary parameters (consistent with other methods)
+    # Get Elementary result for initial parameters
     elementary_analyzer = woehler.Elementary(fatigue_data)
     elementary_result = elementary_analyzer.analyze()
-    
-    # Calculate ND using transition_cycles approach
-    slope = elementary_result.k_1
-    lg_intercept = np.log10(elementary_result.ND) - (-slope) * np.log10(elementary_result.SD)
-    final_nd = 10**(lg_intercept + (-slope) * np.log10(final_sd))
+
+    # Recalculate k_1 (slope) using finite zone fractures and optimized SD
+    finite_fractures = fatigue_data.fractures
+    if len(finite_fractures) >= 2:
+        # Recalculate slope using optimized SD as the intercept point
+        from scipy.stats import linregress
+        slope_new, lg_intercept_new, _, _, _ = linregress(
+            np.log10(finite_fractures.load),
+            np.log10(finite_fractures.cycles)
+        )
+        final_k1 = -slope_new
+        
+        # Recalculate ND using new slope and optimized SD
+        final_nd = 10**(lg_intercept_new + slope_new * np.log10(final_sd))
+    else:
+        # Fallback to Elementary values if insufficient data
+        final_k1 = elementary_result.k_1
+        slope = elementary_result.k_1
+        lg_intercept = np.log10(elementary_result.ND) - (-slope) * np.log10(elementary_result.SD)
+        final_nd = 10**(lg_intercept + (-slope) * np.log10(final_sd))
     
     # Create a Series for compatibility with other methods
     result_series = pd.Series({
         'SD': final_sd,
         'TS': final_ts,
         'ND': final_nd,
-        'k_1': slope,
+        'k_1': final_k1,
         'TN': elementary_result.TN,
         'mu': optimized_mu,
         'sigma': optimized_sigma
@@ -639,7 +656,7 @@ def run_direct_lognormal_analysis(fatigue_data):
         'sigma': optimized_sigma,
         'slog': optimized_sigma,  # Store as slog for compatibility
         'ND': final_nd,
-        'k_1': slope,
+        'k_1': final_k1,
         'TN': elementary_result.TN,
         'optimization_success': result.success,
         'status_message': status_message,
@@ -970,16 +987,16 @@ if fatigue_data is not None:
     if METHOD_TO_RUN == "MaxLikeInf":
         method_results = run_maxlike_analysis(fatigue_data)
         
-    elif METHOD_TO_RUN == "L-BFGS-B":
-        # Default: uses Huck's TS. Manual TS bounds e.g.: ts_bounds=(1.0, 10.0)
-        method_results = run_lbfgsb_analysis(fatigue_data)
+    # elif METHOD_TO_RUN == "L-BFGS-B":
+    #     # Default: uses Huck's TS. Manual TS bounds e.g.: ts_bounds=(1.0, 10.0)
+    #     method_results = run_lbfgsb_analysis(fatigue_data)
         
-    elif METHOD_TO_RUN == "MaxLikeFull":
-        # Default: uses Huck's TS. Manual TS bounds e.g.: ts_bounds=(1.0, 10.0)
-        method_results = run_maxlikefull_analysis(fatigue_data)
+    # elif METHOD_TO_RUN == "MaxLikeFull":
+    #     # Default: uses Huck's TS. Manual TS bounds e.g.: ts_bounds=(1.0, 10.0)
+    #     method_results = run_maxlikefull_analysis(fatigue_data)
         
-    elif METHOD_TO_RUN == "Nelder-Mead-StdLog":
-        method_results = run_nelder_mead_stdlog_analysis(fatigue_data)
+    # elif METHOD_TO_RUN == "Nelder-Mead-StdLog":
+    #     method_results = run_nelder_mead_stdlog_analysis(fatigue_data)
         
     elif METHOD_TO_RUN == "Lognormal":
         method_results = run_direct_lognormal_analysis(fatigue_data)
@@ -1065,13 +1082,13 @@ if fatigue_data is not None:
         if method_name == "MaxLikeInf":
             method_results = run_maxlike_analysis(fatigue_data)
             
-        elif method_name == "L-BFGS-B":
-            # Uses Huck's TS by default
-            method_results = run_lbfgsb_analysis(fatigue_data)
+        # elif method_name == "L-BFGS-B":
+        #     # Uses Huck's TS by default
+        #     method_results = run_lbfgsb_analysis(fatigue_data)
             
-        elif method_name == "MaxLikeFull":
-            # Uses Huck's TS by default  
-            method_results = run_maxlikefull_analysis(fatigue_data)
+        # elif method_name == "MaxLikeFull":
+        #     # Uses Huck's TS by default  
+        #     method_results = run_maxlikefull_analysis(fatigue_data)
             
         elif method_name == "Lognormal":
             method_results = run_direct_lognormal_analysis(fatigue_data)
