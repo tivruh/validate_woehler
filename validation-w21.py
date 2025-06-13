@@ -166,7 +166,7 @@ class MaxLikeInfWithTracking(woehler.MaxLikeInf):
         
     def _MaxLikeInf__max_likelihood_inf_limit(self):
         """Override to add tracking"""
-        SD_start = self._fd.fatigue_limit
+        SD_start = self._fd.finite_infinite_transition
         TS_start = 1.2
         
         def tracked_objective(p):
@@ -981,7 +981,7 @@ if fatigue_data is not None:
     # METHOD_TO_RUN = "L-BFGS-B"
     # METHOD_TO_RUN = "MaxLikeFull"
     # METHOD_TO_RUN = "Nelder-Mead-StdLog"
-    METHOD_TO_RUN = "Direct-Lognormal"
+    METHOD_TO_RUN = "Lognormal"
 
     # Run selected analysis
     if METHOD_TO_RUN == "MaxLikeInf":
@@ -1060,7 +1060,7 @@ for method_name, results in ANALYSIS_RESULTS.items():
     
 # %% Run All Methods - Complete Analysis and Save
 # Update dataset path and run this block to analyze with all methods
-DATASET_PATH = "All Data/Doosan_M4.xlsx"
+DATASET_PATH = "All Data/4PB_2.xlsx"
 NG = 5000000
 
 # Load and prepare data
@@ -1115,5 +1115,4 @@ if fatigue_data is not None:
     
 else:
     print("Failed to load data. Check file path and format.")
-
 # %%
