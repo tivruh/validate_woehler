@@ -1028,159 +1028,181 @@ def batch_process_all_datasets(data_directory="All Data"):
     return batch_results
 
 
-# %% File Selection, Data Loading
-# Update these settings and run this block
-DATASET_PATH = "All Data/4PB_2.xlsx"  # Update this path
-
-# Load and prepare data
-fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(DATASET_PATH)
-
-# %% Select Method, run Analysis
-
-if fatigue_data is not None:
-    # Update global SD_BOUNDS for other methods
-    SD_BOUNDS = calculated_sd_bounds
+def export_batch_results_to_excel(batch_results, output_filename=None):
+    """Export all lognormal results to single Excel file"""
     
-    # Method selection: Uncomment to select Method to run
+    if output_filename is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_filename = f"lognormal_batch_results_{timestamp}.xlsx"
     
-    # METHOD_TO_RUN = "MaxLikeInf"
-    # METHOD_TO_RUN = "L-BFGS-B"
-    # METHOD_TO_RUN = "MaxLikeFull"
-    # METHOD_TO_RUN = "Nelder-Mead-StdLog"
-    METHOD_TO_RUN = "Lognormal"
-
-    # Run selected analysis
-    if METHOD_TO_RUN == "MaxLikeInf":
-        method_results = run_maxlike_analysis(fatigue_data)
-        
-    # elif METHOD_TO_RUN == "L-BFGS-B":
-    #     # Default: uses Huck's TS. Manual TS bounds e.g.: ts_bounds=(1.0, 10.0)
-    #     method_results = run_lbfgsb_analysis(fatigue_data)
-        
-    # elif METHOD_TO_RUN == "MaxLikeFull":
-    #     # Default: uses Huck's TS. Manual TS bounds e.g.: ts_bounds=(1.0, 10.0)
-    #     method_results = run_maxlikefull_analysis(fatigue_data)
-        
-    # elif METHOD_TO_RUN == "Nelder-Mead-StdLog":
-    #     method_results = run_nelder_mead_stdlog_analysis(fatigue_data)
-        
-    elif METHOD_TO_RUN == "Lognormal":
-        method_results = run_direct_lognormal_analysis(fatigue_data)
-        
-    else:
-        print(f"Unknown method: {METHOD_TO_RUN}")
-        method_results = None
+    # Convert to DataFrame
+    df_results = pd.DataFrame(batch_results)
     
-    if method_results is not None:
-        # Store in global results dictionary
-        ANALYSIS_RESULTS[method_results['Method']] = method_results
+    # Select key columns for export
+    columns = ['dataset_name', 'SD', 'TS', 'slog', 'ND', 'k_1', 'TN', 
+               'optimization_success', 'status_message', 'iterations']
+    
+    df_export = df_results[columns]
+    df_export.to_excel(output_filename, index=False)
+    
+    print(f"\n📊 Batch results exported to: {output_filename}")
+    print(f"📈 Total datasets: {len(df_export)}")
+    return output_filename
+
+
+# # %% File Selection, Data Loading
+# # Update these settings and run this block
+# DATASET_PATH = "All Data/4PB_2.xlsx"  # Update this path
+
+# # Load and prepare data
+# fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(DATASET_PATH)
+
+# # %% Select Method, run Analysis
+
+# if fatigue_data is not None:
+#     # Update global SD_BOUNDS for other methods
+#     SD_BOUNDS = calculated_sd_bounds
+    
+#     # Method selection: Uncomment to select Method to run
+    
+#     # METHOD_TO_RUN = "MaxLikeInf"
+#     # METHOD_TO_RUN = "L-BFGS-B"
+#     # METHOD_TO_RUN = "MaxLikeFull"
+#     # METHOD_TO_RUN = "Nelder-Mead-StdLog"
+#     METHOD_TO_RUN = "Lognormal"
+
+#     # Run selected analysis
+#     if METHOD_TO_RUN == "MaxLikeInf":
+#         method_results = run_maxlike_analysis(fatigue_data)
         
-        # Display results
-        print(f"\n=== {method_results['Method']} Results ===")
-        print(f"SD: {method_results['SD']:.2f}")
-        print(f"TS: {method_results['TS']:.3f}")
-        print(f"slog: {method_results['slog']:.4f}")
-        print(f"ND: {method_results['ND']:.0f}")
-        print(f"k_1: {method_results['k_1']:.3f}")
-        print(f"Status: {method_results['status_message']}")
-        print(f"Iterations: {method_results['iterations']}")
+#     # elif METHOD_TO_RUN == "L-BFGS-B":
+#     #     # Default: uses Huck's TS. Manual TS bounds e.g.: ts_bounds=(1.0, 10.0)
+#     #     method_results = run_lbfgsb_analysis(fatigue_data)
         
-        # Display SN curve and convergence plot
-        display_sn_curve(fatigue_data, method_results['result_object'], method_results['Method'])
-        display_convergence_plot(method_results['optimization_steps'], method_results['Method'])
-        display_likelihood_plot(method_results['optimization_steps'], method_results['Method'])
+#     # elif METHOD_TO_RUN == "MaxLikeFull":
+#     #     # Default: uses Huck's TS. Manual TS bounds e.g.: ts_bounds=(1.0, 10.0)
+#     #     method_results = run_maxlikefull_analysis(fatigue_data)
         
-        print(f"\nAnalysis complete. Results ready for saving.")
-    else:
-        print("Analysis failed.")
-else:
-    print("Failed to load data. Check file path and format.")
+#     # elif METHOD_TO_RUN == "Nelder-Mead-StdLog":
+#     #     method_results = run_nelder_mead_stdlog_analysis(fatigue_data)
+        
+#     elif METHOD_TO_RUN == "Lognormal":
+#         method_results = run_direct_lognormal_analysis(fatigue_data)
+        
+#     else:
+#         print(f"Unknown method: {METHOD_TO_RUN}")
+#         method_results = None
+    
+#     if method_results is not None:
+#         # Store in global results dictionary
+#         ANALYSIS_RESULTS[method_results['Method']] = method_results
+        
+#         # Display results
+#         print(f"\n=== {method_results['Method']} Results ===")
+#         print(f"SD: {method_results['SD']:.2f}")
+#         print(f"TS: {method_results['TS']:.3f}")
+#         print(f"slog: {method_results['slog']:.4f}")
+#         print(f"ND: {method_results['ND']:.0f}")
+#         print(f"k_1: {method_results['k_1']:.3f}")
+#         print(f"Status: {method_results['status_message']}")
+#         print(f"Iterations: {method_results['iterations']}")
+        
+#         # Display SN curve and convergence plot
+#         display_sn_curve(fatigue_data, method_results['result_object'], method_results['Method'])
+#         display_convergence_plot(method_results['optimization_steps'], method_results['Method'])
+#         display_likelihood_plot(method_results['optimization_steps'], method_results['Method'])
+        
+#         print(f"\nAnalysis complete. Results ready for saving.")
+#     else:
+#         print("Analysis failed.")
+# else:
+#     print("Failed to load data. Check file path and format.")
     
 
-# %% Save last run Method
+# # %% Save last run Method
 
-# Save selected method results
-if 'ANALYSIS_RESULTS' in globals() and METHOD_TO_RUN in ANALYSIS_RESULTS:
-    save_method_results(ANALYSIS_RESULTS[METHOD_TO_RUN], fatigue_data, OUTPUT_BASE_DIR)
-    print(f"Saved {METHOD_TO_RUN} results")
-else:
-    print(f"No {METHOD_TO_RUN} results to save. Run analysis first.")
-
-
-# %% Compile current analysis results to Excel
-# Update the filename as needed, or leave None for automatic timestamp
-COMPARISON_FILENAME = None  # or "my_campaign_results.xlsx"
-
-if 'ANALYSIS_RESULTS' in globals() and len(ANALYSIS_RESULTS) > 1:  # More than just dataset_info
-    compile_results_to_excel(ANALYSIS_RESULTS, COMPARISON_FILENAME)
-else:
-    print("No results to compile. Run analysis first.")
+# # Save selected method results
+# if 'ANALYSIS_RESULTS' in globals() and METHOD_TO_RUN in ANALYSIS_RESULTS:
+#     save_method_results(ANALYSIS_RESULTS[METHOD_TO_RUN], fatigue_data, OUTPUT_BASE_DIR)
+#     print(f"Saved {METHOD_TO_RUN} results")
+# else:
+#     print(f"No {METHOD_TO_RUN} results to save. Run analysis first.")
 
 
-# %%
-print("Current ANALYSIS_RESULTS:")
-for method_name, results in ANALYSIS_RESULTS.items():
-    if method_name != 'dataset_info':
-        print(f"  {method_name}: SD={results['SD']:.2f}")
+# # %% Compile current analysis results to Excel
+# # Update the filename as needed, or leave None for automatic timestamp
+# COMPARISON_FILENAME = None  # or "my_campaign_results.xlsx"
+
+# if 'ANALYSIS_RESULTS' in globals() and len(ANALYSIS_RESULTS) > 1:  # More than just dataset_info
+#     compile_results_to_excel(ANALYSIS_RESULTS, COMPARISON_FILENAME)
+# else:
+#     print("No results to compile. Run analysis first.")
+
+
+# # %%
+# print("Current ANALYSIS_RESULTS:")
+# for method_name, results in ANALYSIS_RESULTS.items():
+#     if method_name != 'dataset_info':
+#         print(f"  {method_name}: SD={results['SD']:.2f}")
         
     
-# %% Run All Methods - Complete Analysis and Save
-# Update dataset path and run this block to analyze with all methods
-DATASET_PATH = "All Data/4PB_2.xlsx"
-NG = 5000000
+# # %% Run All Methods - Complete Analysis and Save
+# # Update dataset path and run this block to analyze with all methods
+# DATASET_PATH = "All Data/4PB_2.xlsx"
+# NG = 5000000
 
-# Load and prepare data
-print("=== Loading Dataset ===")
-fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(DATASET_PATH)
+# # Load and prepare data
+# print("=== Loading Dataset ===")
+# fatigue_data, calculated_sd_bounds, df_prepared = load_and_prepare_data(DATASET_PATH)
 
-if fatigue_data is not None:
-    # Update global SD_BOUNDS for optimization methods
-    SD_BOUNDS = calculated_sd_bounds
+# if fatigue_data is not None:
+#     # Update global SD_BOUNDS for optimization methods
+#     SD_BOUNDS = calculated_sd_bounds
     
-    # List of methods to run
-    methods_to_run = ["MaxLikeInf", "Lognormal"]
+#     # List of methods to run
+#     methods_to_run = ["MaxLikeInf", "Lognormal"]
     
-    print(f"\n=== Running All Methods ===")
-    for method_name in methods_to_run:
-        print(f"\n--- Running {method_name} ---")
+#     print(f"\n=== Running All Methods ===")
+#     for method_name in methods_to_run:
+#         print(f"\n--- Running {method_name} ---")
         
-        # Run selected analysis
-        if method_name == "MaxLikeInf":
-            method_results = run_maxlike_analysis(fatigue_data)
+#         # Run selected analysis
+#         if method_name == "MaxLikeInf":
+#             method_results = run_maxlike_analysis(fatigue_data)
             
-        # elif method_name == "L-BFGS-B":
-        #     # Uses Huck's TS by default
-        #     method_results = run_lbfgsb_analysis(fatigue_data)
+#         # elif method_name == "L-BFGS-B":
+#         #     # Uses Huck's TS by default
+#         #     method_results = run_lbfgsb_analysis(fatigue_data)
             
-        # elif method_name == "MaxLikeFull":
-        #     # Uses Huck's TS by default  
-        #     method_results = run_maxlikefull_analysis(fatigue_data)
+#         # elif method_name == "MaxLikeFull":
+#         #     # Uses Huck's TS by default  
+#         #     method_results = run_maxlikefull_analysis(fatigue_data)
             
-        elif method_name == "Lognormal":
-            method_results = run_direct_lognormal_analysis(fatigue_data)
+#         elif method_name == "Lognormal":
+#             method_results = run_direct_lognormal_analysis(fatigue_data)
         
-        # Store in global results dictionary
-        ANALYSIS_RESULTS[method_results['Method']] = method_results
+#         # Store in global results dictionary
+#         ANALYSIS_RESULTS[method_results['Method']] = method_results
         
-        # Display brief results
-        print(f"  SD: {method_results['SD']:.2f}")
-        print(f"  TS: {method_results['TS']:.3f}")
-        print(f"  Status: {method_results['status_message']}")
+#         # Display brief results
+#         print(f"  SD: {method_results['SD']:.2f}")
+#         print(f"  TS: {method_results['TS']:.3f}")
+#         print(f"  Status: {method_results['status_message']}")
         
-        # Save method results to directory
-        save_method_results(method_results, fatigue_data, OUTPUT_BASE_DIR)
-        print(f"  Results saved to directory")
+#         # Save method results to directory
+#         save_method_results(method_results, fatigue_data, OUTPUT_BASE_DIR)
+#         print(f"  Results saved to directory")
     
-    # Compile all results to Excel
-    print(f"\n=== Compiling Results to Excel ===")
-    compile_results_to_excel(ANALYSIS_RESULTS, filename="all_methods_comparison.xlsx")
+#     # Compile all results to Excel
+#     print(f"\n=== Compiling Results to Excel ===")
+#     compile_results_to_excel(ANALYSIS_RESULTS, filename="all_methods_comparison.xlsx")
     
-    print(f"\n=== Analysis Complete ===")
-    print(f"Methods run: {list(ANALYSIS_RESULTS.keys())}")
-    print(f"All results saved and compiled!")
+#     print(f"\n=== Analysis Complete ===")
+#     print(f"Methods run: {list(ANALYSIS_RESULTS.keys())}")
+#     print(f"All results saved and compiled!")
     
-else:
-    print("Failed to load data. Check file path and format.")
+# else:
+#     print("Failed to load data. Check file path and format.")
 
 
 # %% Batch Process All Datasets - NEW MAIN EXECUTION
@@ -1198,6 +1220,11 @@ if batch_results:
         success = result['optimization_success']
         status = "✅" if success else "❌"
         print(f"{status} {dataset}: SD={sd:.2f}, TS={ts:.3f}")
+    
+    # Export to Excel
+    excel_file = export_batch_results_to_excel(batch_results)
+    print(f"✅ All results saved to Excel!")
+    
 else:
     print("No datasets processed successfully.")
 
