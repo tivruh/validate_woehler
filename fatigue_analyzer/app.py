@@ -35,7 +35,8 @@ def main():
     for series_name, series_info in selected_data.items():
         try:
             # Auto-detect NG from censor column (Feature 2: no user NG input needed)
-            fatigue_data, detected_ng, df_prepared = load_and_prepare_data(series_info['data'])
+            
+            fatigue_data, detected_ng, sd_bounds, df_prepared = load_and_prepare_data(series_info['data'])
             
             if fatigue_data is None:
                 processing_errors.append(f"Failed to process {series_name}")
