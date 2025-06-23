@@ -1,7 +1,6 @@
 import streamlit as st
 from ui_components import render_main, render_sidebar, apply_custom_styles
 from results import display_results
-from analysis import FatigueAnalyzer
 from utils import LognormalAnalyzer
 from preprocess import load_and_prepare_data
 
