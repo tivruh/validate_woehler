@@ -247,8 +247,9 @@ class LognormalAnalyzer(pylife.materialdata.woehler.Elementary):
 
 
 class ProcessData:
-    def __init__(self):
-        pass
+    def __init__(self, N_LCF, NG):
+        self.N_LCF = N_LCF
+        self.NG = NG
 
     
     def process_data(self, df):
@@ -362,51 +363,55 @@ class ProcessData:
 
 
 class PlotFatigue:
-    def __init__(self):
-        pass
+    def __init__(self, NG, Ch1, load_type, lower_prob, upper_prob):
+        self.NG = NG
+        self.Ch1 = Ch1
+        self.load_type = load_type
+        self.lower_prob = lower_prob
+        self.upper_prob = upper_prob
 
-        def create_plot(self, series_data, curve_type, NG, Ch1, load_type, lower_prob, upper_prob):
-            ranges = self.get_data_ranges(series_data)
-            print("Using ranges for plot configuration:", ranges)
+    def create_plot(self, series_data, curve_type="Full"):
+        ranges = self.get_data_ranges(series_data)
+        print("Using ranges for plot configuration:", ranges)
 
-            fig = make_subplots()
-            results = []
-            
-            colors = ['#648fff', '#fe6100', '#dc267f', '#785ef0', '#ffb000', '#000000']
-            
-            any_survivors = False
+        fig = make_subplots()
+        results = []
+        
+        colors = ['#648fff', '#fe6100', '#dc267f', '#785ef0', '#ffb000', '#000000']
+        
+        any_survivors = False
 
-            for i, (series_name, series_info) in enumerate(series_data.items()):
-                color = colors[i % len(colors)]
-                # Process the DataFrame from the series info dictionary
-                series_result = self.process_data(series_info['data'])
-                
-                # Check if optimization failed
-                if series_result.get('optimization_failed', False):
-                    st.error(f"Optimization failed for series '{series_name}': {series_result.get('failure_reason', 'Unknown reason')}")
-                    st.warning("Please try a different dataset or contact support for assistance.")
-                    continue  # Skip further processing for this series
-                
-                series_result['series_name'] = series_name
-                series_result['show_prob_lines'] = series_info['show_prob_lines']
-                series_result['prob_levels'] = {
-                    'lower': self.lower_prob,
-                    'upper': self.upper_prob
-                }
-                    
-                self._plot_data(
-                    fig, series_info['data'], series_result, series_name, 
-                    color, curve_type)
-                results.append(series_result)
-                
-                if series_result['has_survivors']:
-                    any_survivors = True
+        for i, (series_name, series_info) in enumerate(series_data.items()):
+            color = colors[i % len(colors)]
+            # Process the DataFrame from the series info dictionary
+            series_result = self.process_data(series_info['data'])
             
-            self._format_plot(fig, any_survivors, ranges)
-            fig.update_layout(
-                title='Wöhler Curve'
-            )
-            return fig, results
+            # Check if optimization failed
+            if series_result.get('optimization_failed', False):
+                st.error(f"Optimization failed for series '{series_name}': {series_result.get('failure_reason', 'Unknown reason')}")
+                st.warning("Please try a different dataset or contact support for assistance.")
+                continue  # Skip further processing for this series
+            
+            series_result['series_name'] = series_name
+            series_result['show_prob_lines'] = series_info['show_prob_lines']
+            series_result['prob_levels'] = {
+                'lower': self.lower_prob,
+                'upper': self.upper_prob
+            }
+                
+            self._plot_data(
+                fig, series_info['data'], series_result, series_name, 
+                color, curve_type)
+            results.append(series_result)
+            
+            if series_result['has_survivors']:
+                any_survivors = True
+        
+        self._format_plot(fig, any_survivors, ranges)
+        fig.update_layout(
+            title='Wöhler Curve'
+        )
+        return fig, results
     
     
     def get_data_ranges(self, series_data):
@@ -779,15 +784,10 @@ class FatigueAnalyzer:
         self.Ch1 = Ch1
         self.load_type = load_type
         self.lower_prob, self.upper_prob = prob_levels
-        self.data_processor = ProcessData()
         
-        print(f"Debug: User selected Probability Bands: {prob_levels}")
-    
-    def process_data(self, df):
-        return self.data_processor.process_data(df, self.N_LCF, self.NG)
-    
-    def get_runouts(self, series_data):
-        return self.data_processor.get_runouts(series_data, self.N_LCF, self.NG)
+        # Create helper classes with their needed configuration
+        self.data_processor = ProcessData(N_LCF, NG)
+        self.plotter = PlotFatigue(NG, Ch1, load_type, self.lower_prob, self.upper_prob)
 
 
     def _get_lcf_start_point(self, df, target_stress, k1, ND):

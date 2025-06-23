@@ -1,2 +1,2 @@
-from FatigueAnalyzer import FatigueAnalyzer
-__all__ = ['FatigueAnalyzer']
+from FatigueAnalyzer import PlotFatigue
+__all__ = ['PlotFatigue']

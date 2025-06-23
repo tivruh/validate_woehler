@@ -3,6 +3,7 @@ st.set_page_config(page_title="Fatigue Analyser", layout="wide")
 
 from ui_components import render_main, render_sidebar, display_results, apply_custom_styles
 from analysis import FatigueAnalyzer
+from plots import PlotFatigue
 
 # Autor: Matthias Funk
 # Short description: Fatigue Analysis Tool
