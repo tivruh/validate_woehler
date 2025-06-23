@@ -188,6 +188,23 @@ def get_example_dataset():
 
     return buffer.getvalue()
 
+
+def optimization_status(results):
+    """Display optimization status for all series in collapsible section"""
+    with st.expander("⚙ Optimization Status", expanded=False):
+        for result in results:
+            if result:
+                series_name = result.get('series_name', 'Unknown')
+                opt_success = result.get('optimization_success', True)
+                opt_message = result.get('optimization_message', 'Success')
+                opt_iterations = result.get('optimization_iterations', 0)
+                
+                if opt_success:
+                    st.success(f"**{series_name}**: ✅ {opt_message} ({opt_iterations} iterations)")
+                else:
+                    st.error(f"**{series_name}**: ❌ {opt_message} ({opt_iterations} iterations)")
+
+
 def apply_custom_styles():
     page_title="Wöhler Fatigue Analyser"
 
