@@ -70,6 +70,8 @@ def main():
                 'optimization_message': getattr(result, 'optimization_message', 'Success'),
                 'optimization_iterations': getattr(result, 'optimization_iterations', 0)
             }
+
+            series_info['processed_data'] = df_prepared
             
         except Exception as e:
             processing_errors.append(f"Error processing {series_name}: {str(e)}")

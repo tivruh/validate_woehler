@@ -45,7 +45,7 @@ class PlotFatigue:
             }
                 
             self._plot_data(
-                fig, series_info['data'], series_result, series_name, 
+                fig, series_info['processed_data'], series_result, series_name, 
                 color, curve_type)
             results.append(series_result)
             
@@ -120,9 +120,9 @@ class PlotFatigue:
                 any_survivors = True
                 
                 # Plot only runout region datapoints
-                df = series_info['data']
-                failures = df[df['failure']]
-                survivors = df[~df['failure']]
+                df = series_info['processed_data']
+                failures = df[df['fracture']]
+                survivors = df[~df['fracture']]
                 
                 # Plot points after ND
                 failures_hcf = failures[failures['cycles'] >= series_result['ND']]
@@ -238,8 +238,8 @@ class PlotFatigue:
 
     
     def _plot_data(self, fig, df, results, series_name, color, curve_type):
-        failures = df[df['failure']]
-        survivors = df[~df['failure']]
+        failures = df[df['fracture']]
+        survivors = df[~df['fracture']]
         
         # Always plot data points
         if not failures.empty:
