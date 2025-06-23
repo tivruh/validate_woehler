@@ -2,8 +2,7 @@ import streamlit as st
 from ui_components import render_main, render_sidebar, apply_custom_styles
 from results import display_results
 from analysis import FatigueAnalyzer
-from plots import PlotFatigue
-from process_data import load_and_prepare_data
+from preprocess import load_and_prepare_data
 
 st.set_page_config(page_title="Fatigue Analyser", layout="wide")
 
@@ -43,12 +42,15 @@ def main():
         st.write("")
         st.write("")
 
-        data_processor = ProcessData(N_LCF, NG)  
         for series_name, series_info in selected_data.items():
-            # Process each series
-            processed_result = data_processor.process_data(series_info['data'])
-            # Add processed result to series_info
-            series_info['processed_result'] = processed_result
+            # Use new function that auto-detects NG from censor
+            fatigue_data, _, _ = load_and_prepare_data(series_info['data'])
+            # Create simple processed result
+            series_info['processed_result'] = {
+                'fatigue_data': fatigue_data,
+                'has_survivors': True,  # will determine properly later
+                'series_name': series_name
+            }
 
         if generate_full:
             fig, results = analyzer.create_plot(selected_data, "Full")

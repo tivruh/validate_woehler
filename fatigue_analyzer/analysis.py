@@ -1,8 +1,10 @@
 import numpy as np
 import pylife.materialdata.woehler as woehler
 import math
-from scipy import optimize, stats, norm
-
+from scipy import optimize, stats
+from scipy.stats import norm
+import pylife
+from plots import PlotFatigue
 
 class FatigueSolver:
     @staticmethod
