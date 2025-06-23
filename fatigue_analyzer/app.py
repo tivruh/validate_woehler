@@ -28,7 +28,7 @@ def main():
         #     for series, runout in n_runouts.items():
         #         st.write(f"{series}: {runout:,} cycles")        
         
-        N_LCF, NG, Ch1, load_type, curve_type, (lower_prob, upper_prob) = render_sidebar(any_survivors, n_runouts)
+        N_LCF, Ch1, load_type, curve_type, (lower_prob, upper_prob) = render_sidebar(any_survivors, n_runouts)
         
         st.write("")
         st.write("")

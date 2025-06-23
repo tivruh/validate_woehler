@@ -111,10 +111,6 @@ def render_main():
 def render_sidebar(any_survivors, n_runouts):
     st.sidebar.title("Input Parameters")
     
-    # default_n_runout = max(n_runouts.values()) if n_runouts else 10000000
-    # NG = st.sidebar.number_input(
-    #     "Cycles to Runout:", value=int(default_n_runout), min_value=100000, step=100000)
-    
     N_LCF = st.sidebar.number_input(
         "Pivot point in LCF:", value=10000, min_value=1000, step=1000)
     
