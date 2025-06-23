@@ -1,13 +1,11 @@
 import streamlit as st
-st.set_page_config(page_title="Fatigue Analyser", layout="wide")
-
-from ui_components import render_main, render_sidebar, display_results, apply_custom_styles
+from ui_components import render_main, render_sidebar, apply_custom_styles
+from results import display_results
 from analysis import FatigueAnalyzer
 from plots import PlotFatigue
-from FatigueAnalyzer import ProcessData
+from process_data import load_and_prepare_data
 
-# Autor: Matthias Funk
-# Short description: Fatigue Analysis Tool
+st.set_page_config(page_title="Fatigue Analyser", layout="wide")
 
 
 def main():
