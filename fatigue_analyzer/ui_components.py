@@ -31,6 +31,7 @@ def render_main():
         st.write("**The data must be uploaded in the correct format**")
 
         example_file = get_example_dataset()
+        
         st.download_button(
             label="Download Example",
             data=example_file,
@@ -110,9 +111,9 @@ def render_main():
 def render_sidebar(any_survivors, n_runouts):
     st.sidebar.title("Input Parameters")
     
-    default_n_runout = max(n_runouts.values()) if n_runouts else 10000000
-    NG = st.sidebar.number_input(
-        "Cycles to Runout:", value=int(default_n_runout), min_value=100000, step=100000)
+    # default_n_runout = max(n_runouts.values()) if n_runouts else 10000000
+    # NG = st.sidebar.number_input(
+    #     "Cycles to Runout:", value=int(default_n_runout), min_value=100000, step=100000)
     
     N_LCF = st.sidebar.number_input(
         "Pivot point in LCF:", value=10000, min_value=1000, step=1000)
@@ -150,7 +151,7 @@ def render_sidebar(any_survivors, n_runouts):
     # Get the selected probability values
     lower_prob, upper_prob = prob_options[selected_prob]
     
-    return N_LCF, NG, Ch1, load_type, curve_type, (lower_prob, upper_prob)
+    return N_LCF, Ch1, load_type, curve_type, (lower_prob, upper_prob)
 
 
 

@@ -3,11 +3,11 @@ import numpy as np
 import pylife.materialdata.woehler as woehler
 import traceback
 
-def load_and_prepare_data(file_path):
+def load_and_prepare_data(df_input):
     """Load fatigue data and auto-detect NG from censor column"""
     try:
         # Load data
-        df_test = pd.read_excel(file_path, sheet_name='Data')
+        df_test = df_input.copy()
         
         # Rename 'loads' to 'load' if needed
         if 'loads' in df_test.columns:
@@ -38,7 +38,7 @@ def load_and_prepare_data(file_path):
         print(f"Total data points: {len(df_prepared)}")
         print(f"Load range: {min_load:.1f} to {max_load:.1f}")
 
-        return fatigue_data, sd_bounds, df_prepared
+        return fatigue_data, ng, sd_bounds, df_prepared
         
     except Exception as e:
         print(f"Error loading data: {e}")

@@ -1,11 +1,5 @@
-import numpy as np
-import pylife.materialdata.woehler as woehler
-import math
-from scipy import optimize, stats
-from scipy.stats import norm
 from plots import PlotFatigue
-from utils import FatigueSolver, LognormalAnalyzer
-
+from utils import FatigueSolver
 
 class ProcessData:
     def __init__(self, N_LCF, NG):

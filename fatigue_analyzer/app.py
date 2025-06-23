@@ -2,6 +2,7 @@ import streamlit as st
 from ui_components import render_main, render_sidebar, apply_custom_styles
 from results import display_results
 from analysis import FatigueAnalyzer
+from utils import LognormalAnalyzer
 from preprocess import load_and_prepare_data
 
 st.set_page_config(page_title="Fatigue Analyser", layout="wide")
@@ -28,7 +29,6 @@ def main():
         #         st.write(f"{series}: {runout:,} cycles")        
         
         N_LCF, NG, Ch1, load_type, curve_type, (lower_prob, upper_prob) = render_sidebar(any_survivors, n_runouts)
-        analyzer = FatigueAnalyzer(N_LCF, NG, Ch1, load_type, prob_levels=(lower_prob, upper_prob))
         
         st.write("")
         st.write("")
@@ -42,15 +42,29 @@ def main():
         st.write("")
         st.write("")
 
+        detected_ngs = []
         for series_name, series_info in selected_data.items():
-            # Use new function that auto-detects NG from censor
-            fatigue_data, _, _ = load_and_prepare_data(series_info['data'])
-            # Create simple processed result
+            # Load data with auto-detect NG
+            fatigue_data, detected_ng, sd_bounds, df_prepared = load_and_prepare_data(series_info['data'])
+            detected_ngs.append(detected_ng)
+            
+            # Run analysis to get SD, TS, ND, k1
+            analyzer_temp = LognormalAnalyzer(fatigue_data)
+            result = analyzer_temp.analyze()
+            
+            # Create processed_result with all needed parameters
             series_info['processed_result'] = {
-                'fatigue_data': fatigue_data,
-                'has_survivors': True,  # will determine properly later
+                'SD': result.SD,
+                'TS': result.TS, 
+                'ND': result.ND,
+                'k1': result.k_1,  # Note: k_1 vs k1
+                'TN': result.TN,
+                'has_survivors': True,
                 'series_name': series_name
             }
+        
+        NG = max(detected_ngs)
+        analyzer = FatigueAnalyzer(N_LCF, NG, Ch1, load_type, prob_levels=(lower_prob, upper_prob))
 
         if generate_full:
             fig, results = analyzer.create_plot(selected_data, "Full")
