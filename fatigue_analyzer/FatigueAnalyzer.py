@@ -789,6 +789,14 @@ class FatigueAnalyzer:
         self.data_processor = ProcessData(N_LCF, NG)
         self.plotter = PlotFatigue(NG, Ch1, load_type, self.lower_prob, self.upper_prob)
 
+    def create_plot(self, series_data, curve_type="Full"):
+        return self.plotter.create_plot(series_data, curve_type)
+
+    def create_endurance_comparison(self, series_data):
+        return self.plotter.create_endurance_comparison(series_data)
+
+    def get_runouts(self, series_data):
+        return self.data_processor.get_runouts(series_data)
 
     def _get_lcf_start_point(self, df, target_stress, k1, ND):
         """Calculate the starting point for LCF curves based on minimum cycles in data
