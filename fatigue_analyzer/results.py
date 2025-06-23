@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import math
+from utils import FatigueSolver
 
 def display_results(results, Ch1, any_survivors):
     data = []

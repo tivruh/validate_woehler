@@ -2,7 +2,8 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import math
-from analysis import FatigueSolver
+from utils import FatigueSolver
+import streamlit as st
 
 class PlotFatigue:
     def __init__(self, NG, Ch1, load_type, lower_prob, upper_prob, N_LCF):
