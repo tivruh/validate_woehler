@@ -8,12 +8,6 @@ import plotly.graph_objects as go
 import pylife
 from pylife.materialdata import woehler
 
-import streamlit as st
-import pandas as pd
-import math
-
-from io import BytesIO
-
 from scipy import optimize, stats
 from plotly.subplots import make_subplots
 from scipy.stats import norm
@@ -246,11 +240,17 @@ class LognormalAnalyzer(pylife.materialdata.woehler.Elementary):
         return wc
 
 
-class ProcessData:
-    def __init__(self, N_LCF, NG):
+
+class FatigueAnalyzer:
+    def __init__(self, N_LCF, NG, Ch1, load_type, prob_levels=(0.05, 0.95)):
         self.N_LCF = N_LCF
         self.NG = NG
-
+        self.Ch1 = Ch1
+        self.load_type = load_type
+        self.lower_prob, self.upper_prob = prob_levels
+        
+        print(f"Debug: User selected Probability Bands: {prob_levels}")
+    
     
     def process_data(self, df):
         # Check if 'censor' column exists
@@ -294,7 +294,7 @@ class ProcessData:
         TN = round(maxlike.TN, 2)
         TS = round(maxlike.TS, 2)
         
-        L_LCF = FatigueSolver.load_LCF(k1, self.NG, SD, self.N_LCF)
+        L_LCF = FatigueSolver.load_LCF(k1, ND or self.NG, SD, self.N_LCF)
         
         x_LCF = [self.N_LCF, ND, self.NG]
         y_LCF = [L_LCF, SD, SD]
@@ -316,6 +316,7 @@ class ProcessData:
             'optimization_message': optimization_message,
             'optimization_iterations': optimization_iterations
         }
+    
     
     
     def process_data_no_survivors(self, df):
@@ -362,17 +363,7 @@ class ProcessData:
         return any_survivors, n_runouts
 
 
-class PlotFatigue:
-    def __init__(self, NG, Ch1, load_type, lower_prob, upper_prob, N_LCF):
-        self.N_LCF = N_LCF
-        self.NG = NG
-        self.Ch1 = Ch1
-        self.load_type = load_type
-        self.lower_prob = lower_prob
-        self.upper_prob = upper_prob
-
     def create_plot(self, series_data, curve_type="Full"):
-        
         ranges = self.get_data_ranges(series_data)
         print("Using ranges for plot configuration:", ranges)
 
@@ -386,8 +377,7 @@ class PlotFatigue:
         for i, (series_name, series_info) in enumerate(series_data.items()):
             color = colors[i % len(colors)]
             # Process the DataFrame from the series info dictionary
-            temp_processor = ProcessData(self.N_LCF, self.NG)
-            series_result = temp_processor.process_data(series_info['data'])
+            series_result = self.process_data(series_info['data'])
             
             # Check if optimization failed
             if series_result.get('optimization_failed', False):
@@ -410,7 +400,7 @@ class PlotFatigue:
             if series_result['has_survivors']:
                 any_survivors = True
         
-        self._format_plot(fig)
+        self._format_plot(fig, any_survivors, ranges)
         fig.update_layout(
             title='Wöhler Curve'
         )
@@ -466,8 +456,7 @@ class PlotFatigue:
             color = colors[i % len(colors)]
             
             # Process the data and collect results
-            temp_processor = ProcessData(self.N_LCF, self.NG)
-            series_result = temp_processor.process_data(series_info['data'])
+            series_result = self.process_data(series_info['data'])
             series_result['series_name'] = series_name
             series_result['show_prob_lines'] = series_info['show_prob_lines']
             series_result['prob_levels'] = {
@@ -545,7 +534,7 @@ class PlotFatigue:
         # Get the minimum ND value from all series that have survivors
         min_nd = min((res['ND'] for res in results if res['has_survivors']), default=self.NG/10)
         
-        self._format_plot(fig, endurance_view=True)
+        self._format_plot(fig, any_survivors, ranges, endurance_view=True)
         
         # Update layout with specific title and adjust x-axis range
         fig.update_layout(
@@ -553,7 +542,49 @@ class PlotFatigue:
         )
         fig.update_xaxes(range=[math.log10(min_nd * 0.95), math.log10(self.NG * 1.05)])
         
-        return fig, results    
+        return fig, results
+        
+    
+    def _get_lcf_start_point(self, df, target_stress, k1, ND):
+        """Calculate the starting point for LCF curves based on minimum cycles in data
+        
+        Args:
+            df: DataFrame containing the test data
+            target_stress: The stress level at the knee point (can be Pü50, Pü5, etc)
+            k1: Slope of the curve
+            ND: Knee point cycles
+            
+        Returns:
+            tuple: (min_cycles, load_at_min) - The x,y coordinates where the curve should start
+        """
+        min_cycles = df['cycles'].min()
+        
+        # Using the same slope k1, calculate what the load should be at min_cycles
+        L_LCF = FatigueSolver.load_LCF(k1, ND, target_stress, min_cycles)
+        
+        return min_cycles, L_LCF
+
+    
+    def _get_curve_coordinates(self, curve_type, min_cycles, ND, NG, start_value, end_value):
+        """
+        Get the appropriate coordinates for plotting based on curve type.
+        
+        Args:
+            curve_type: The type of curve to plot ('Full', 'LCF', or 'HCF')
+            min_cycles, ND, NG: The cycle values for curve segments
+            start_value, end_value: The stress values for curve segments
+        
+        Returns:
+            tuple: (x_coordinates, y_coordinates) for plotting
+        """
+        if curve_type == 'LCF':
+            return [min_cycles, ND], [start_value, end_value]
+        elif curve_type == 'HCF':
+            return [ND, NG], [end_value, end_value]
+        else:  # 'Full'
+            return [min_cycles, ND, NG], [start_value, end_value, end_value]
+    
+    
     
     
     def _plot_data(self, fig, df, results, series_name, color, curve_type):
@@ -660,7 +691,8 @@ class PlotFatigue:
                         ))
     
     
-    def _format_plot(self, fig, endurance_view=False):
+    
+    def _format_plot(self, fig, any_survivors, ranges, endurance_view=False):
         aspect_ratio = 1.3
         plot_width = 1000
         plot_height = plot_width / aspect_ratio
@@ -781,68 +813,13 @@ class PlotFatigue:
             )
 
 
-class FatigueAnalyzer:
-    def __init__(self, N_LCF, NG, Ch1, load_type, prob_levels=(0.025, 0.975)):
-        self.N_LCF = N_LCF
-        self.NG = NG
-        self.Ch1 = Ch1
-        self.load_type = load_type
-        self.lower_prob, self.upper_prob = prob_levels
-        
-        # Create helper classes with their needed configuration
-        self.data_processor = ProcessData(N_LCF, NG)
-        self.plotter = PlotFatigue(NG, Ch1, load_type, self.lower_prob, self.upper_prob, N_LCF)
-
-    def create_plot(self, series_data, curve_type="Full"):
-        return self.plotter.create_plot(series_data, curve_type)
-
-    def create_endurance_comparison(self, series_data):
-        return self.plotter.create_endurance_comparison(series_data)
-
-    def get_runouts(self, series_data):
-        return self.data_processor.get_runouts(series_data)
-
-    def _get_lcf_start_point(self, df, target_stress, k1, ND):
-        """Calculate the starting point for LCF curves based on minimum cycles in data
-        
-        Args:
-            df: DataFrame containing the test data
-            target_stress: The stress level at the knee point (can be Pü50, Pü5, etc)
-            k1: Slope of the curve
-            ND: Knee point cycles
-            
-        Returns:
-            tuple: (min_cycles, load_at_min) - The x,y coordinates where the curve should start
-        """
-        min_cycles = df['cycles'].min()
-        
-        # Using the same slope k1, calculate what the load should be at min_cycles
-        L_LCF = FatigueSolver.load_LCF(k1, ND, target_stress, min_cycles)
-        
-        return min_cycles, L_LCF
-
-    
-    def _get_curve_coordinates(self, curve_type, min_cycles, ND, NG, start_value, end_value):
-        """
-        Get the appropriate coordinates for plotting based on curve type.
-        
-        Args:
-            curve_type: The type of curve to plot ('Full', 'LCF', or 'HCF')
-            min_cycles, ND, NG: The cycle values for curve segments
-            start_value, end_value: The stress values for curve segments
-        
-        Returns:
-            tuple: (x_coordinates, y_coordinates) for plotting
-        """
-        if curve_type == 'LCF':
-            return [min_cycles, ND], [start_value, end_value]
-        elif curve_type == 'HCF':
-            return [ND, NG], [end_value, end_value]
-        else:  # 'Full'
-            return [min_cycles, ND, NG], [start_value, end_value, end_value]
-    
-
 #frontend_utils.py
+
+import streamlit as st
+import pandas as pd
+import math
+
+from io import BytesIO
 
 # # Validation table formatting Settings 
 # VALIDATION_THRESHOLD_LOW = 5
@@ -1310,6 +1287,8 @@ def display_results(results, Ch1, any_survivors):
 
 # styles.py
 
+import streamlit as st
+
 # Custom CSS for styling
 def apply_custom_styles():
     page_title="Wöhler Fatigue Analyser"
@@ -1377,8 +1356,10 @@ def apply_custom_styles():
 # Autor: Matthias Funk
 # Short description: Fatigue Analysis Tool
 
+import streamlit as st
 
-# st.set_page_config(page_title="Fatigue Analyser", layout="wide")
+
+st.set_page_config(page_title="Fatigue Analyser", layout="wide")
 
 
 def main():
