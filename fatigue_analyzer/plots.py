@@ -197,24 +197,24 @@ class PlotFatigue:
         return fig, results    
     
 
-    def _get_lcf_start_point(self, df, target_stress, k1, ND):
-        """Calculate the starting point for LCF curves based on minimum cycles in data
+    # def _get_lcf_start_point(self, df, target_stress, k1, ND):
+    #     """Calculate the starting point for LCF curves based on minimum cycles in data
         
-        Args:
-            df: DataFrame containing the test data
-            target_stress: The stress level at the knee point (can be Pü50, Pü5, etc)
-            k1: Slope of the curve
-            ND: Knee point cycles
+    #     Args:
+    #         df: DataFrame containing the test data
+    #         target_stress: The stress level at the knee point (can be Pü50, Pü5, etc)
+    #         k1: Slope of the curve
+    #         ND: Knee point cycles
             
-        Returns:
-            tuple: (min_cycles, load_at_min) - The x,y coordinates where the curve should start
-        """
-        min_cycles = df['cycles'].min()
+    #     Returns:
+    #         tuple: (min_cycles, load_at_min) - The x,y coordinates where the curve should start
+    #     """
+    #     min_cycles = df['cycles'].min()
         
-        # Using the same slope k1, calculate what the load should be at min_cycles
-        L_LCF = FatigueSolver.load_LCF(k1, ND, target_stress, min_cycles)
+    #     # Using the same slope k1, calculate what the load should be at min_cycles
+    #     L_LCF = FatigueSolver.load_LCF(k1, ND, target_stress, min_cycles)
         
-        return min_cycles, L_LCF
+    #     return min_cycles, L_LCF
 
     
     def _get_curve_coordinates(self, curve_type, min_cycles, ND, NG, start_value, end_value):
