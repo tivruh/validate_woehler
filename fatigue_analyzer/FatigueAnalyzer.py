@@ -363,7 +363,8 @@ class ProcessData:
 
 
 class PlotFatigue:
-    def __init__(self, NG, Ch1, load_type, lower_prob, upper_prob):
+    def __init__(self, NG, Ch1, load_type, lower_prob, upper_prob, N_LCF):
+        self.N_LCF = N_LCF
         self.NG = NG
         self.Ch1 = Ch1
         self.load_type = load_type
@@ -371,6 +372,7 @@ class PlotFatigue:
         self.upper_prob = upper_prob
 
     def create_plot(self, series_data, curve_type="Full"):
+        
         ranges = self.get_data_ranges(series_data)
         print("Using ranges for plot configuration:", ranges)
 
@@ -384,7 +386,8 @@ class PlotFatigue:
         for i, (series_name, series_info) in enumerate(series_data.items()):
             color = colors[i % len(colors)]
             # Process the DataFrame from the series info dictionary
-            series_result = self.process_data(series_info['data'])
+            temp_processor = ProcessData(self.N_LCF, self.NG)
+            series_result = temp_processor.process_data(series_info['data'])
             
             # Check if optimization failed
             if series_result.get('optimization_failed', False):
