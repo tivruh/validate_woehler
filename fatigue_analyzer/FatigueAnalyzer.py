@@ -386,8 +386,7 @@ class PlotFatigue:
         for i, (series_name, series_info) in enumerate(series_data.items()):
             color = colors[i % len(colors)]
             # Process the DataFrame from the series info dictionary
-            temp_processor = ProcessData(self.N_LCF, self.NG)
-            series_result = temp_processor.process_data(series_info['data'])
+            series_result = series_info['processed_result']
             
             # Check if optimization failed
             if series_result.get('optimization_failed', False):
@@ -466,8 +465,7 @@ class PlotFatigue:
             color = colors[i % len(colors)]
             
             # Process the data and collect results
-            temp_processor = ProcessData(self.N_LCF, self.NG)
-            series_result = temp_processor.process_data(series_info['data'])
+            series_result = series_info['processed_result']
             series_result['series_name'] = series_name
             series_result['show_prob_lines'] = series_info['show_prob_lines']
             series_result['prob_levels'] = {

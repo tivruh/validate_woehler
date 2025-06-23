@@ -4,6 +4,7 @@ st.set_page_config(page_title="Fatigue Analyser", layout="wide")
 from ui_components import render_main, render_sidebar, display_results, apply_custom_styles
 from analysis import FatigueAnalyzer
 from plots import PlotFatigue
+from FatigueAnalyzer import ProcessData
 
 # Autor: Matthias Funk
 # Short description: Fatigue Analysis Tool
@@ -43,7 +44,14 @@ def main():
             
         st.write("")
         st.write("")
-                
+
+        data_processor = ProcessData(N_LCF, NG)  
+        for series_name, series_info in selected_data.items():
+            # Process each series
+            processed_result = data_processor.process_data(series_info['data'])
+            # Add processed result to series_info
+            series_info['processed_result'] = processed_result
+
         if generate_full:
             fig, results = analyzer.create_plot(selected_data, "Full")
             
