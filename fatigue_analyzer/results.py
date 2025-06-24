@@ -21,8 +21,8 @@ def display_results(results, Ch1, any_survivors):
             )
             
             # Generate column names based on probability levels
-            lower_col = f"PÜ{int(lower_prob*100)}"
-            upper_col = f"PÜ{int(upper_prob*100)}"
+            lower_col = f"PÜ{lower_prob*100:g}"
+            upper_col = f"PÜ{upper_prob*100:g}"
             
             result_dict = {
                 "Series": res['series_name'],                
@@ -49,9 +49,9 @@ def display_results(results, Ch1, any_survivors):
         # Update abbreviation meanings to include dynamic probability values
         st.markdown(f"""
         **Abbreviations:**
-        - {lower_col}: Probability of Survival at {int(lower_prob*100)}%
+        - {lower_col}: Probability of Survival at {lower_prob*100:g}%
         - PÜ50: Probability of Survival at 50%
-        - {upper_col}: Probability of Survival at {int(upper_prob*100)}%
+        - {upper_col}: Probability of Survival at {upper_prob*100:g}%
         - slog: Scatter of stress in log / Streuung der Spannung in log
         """)
         # - k: Slope of the S-N curve / Neigung der Wöhlerlinie

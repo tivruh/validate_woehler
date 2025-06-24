@@ -74,9 +74,9 @@ class FatigueSolver:
             PÜ_upper = FatigueSolver.scatter(upper_prob, PÜ50, slog)
             
             return {
-                f'PÜ{int(lower_prob*100)}': round(PÜ_lower, 2),
+                f'PÜ{lower_prob*100:g}': round(PÜ_lower, 2),
                 'PÜ50': round(PÜ50, 2),
-                f'PÜ{int(upper_prob*100)}': round(PÜ_upper, 2)
+                f'PÜ{upper_prob*100:g}': round(PÜ_upper, 2)
             }
         except Exception as e:
             print(f"Error calculating survival probabilities: {e}")

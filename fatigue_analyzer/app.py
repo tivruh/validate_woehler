@@ -106,7 +106,13 @@ def main():
     col1, col2, col3 = st.columns([1, 1, 3])
     
     with col1:
-        generate_full = st.button("Generate Wöhler Curve")
+        # Disable until k and ND validation passes
+        woehler_enabled = False
+        generate_full = st.button("Generate SN Curve", disabled=woehler_enabled == False)
+
+        if woehler_enabled == False:
+            st.caption("⚠️ SN curve disabled pending k and ND validation")
+
     with col2:
         generate_endurance = st.button("Compare Endurance Limits")
     

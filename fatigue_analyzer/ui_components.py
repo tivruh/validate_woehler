@@ -234,6 +234,14 @@ def apply_custom_styles():
             margin: 0 0.5em
         }
         
+        /* Disabled button styling */
+        .stButton > button:disabled {
+            color: #888888 !important;
+            background-color: #f0f0f0 !important;
+            border-color: #cccccc !important;
+            cursor: not-allowed !important;
+        }        
+
         .download-button .stButton > button {
             width: 100%
             margin: 0 0.5em
