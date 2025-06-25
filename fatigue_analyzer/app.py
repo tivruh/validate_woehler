@@ -8,6 +8,8 @@ from utils import LognormalAnalyzer
 st.set_page_config(page_title="Fatigue Analyser", layout="wide")
 
 def main():
+    print("\nDebug: Starting Fatigue Analyzer (main)")  # Debug print
+
     # Apply CSS styling first
     apply_custom_styles()
     

@@ -103,6 +103,9 @@ class PlotFatigue:
         colors = ['#648fff', '#fe6100', '#dc267f', '#785ef0', '#ffb000', '#000000']
         any_survivors = False
         
+        # Debug: collect all HCF data points
+        all_hcf_points = []
+
         # Process each dataset
         for i, (series_name, series_info) in enumerate(series_data.items()):
             color = colors[i % len(colors)]
@@ -127,6 +130,14 @@ class PlotFatigue:
                 # Plot points after ND
                 failures_hcf = failures[failures['cycles'] >= series_result['ND']]
                 survivors_hcf = survivors[survivors['cycles'] >= series_result['ND']]
+
+                for _, point in failures_hcf.iterrows():
+                    all_hcf_points.append({'load': point['load'], 'cycles': point['cycles'], 'series': series_name, 'type': 'failure'})
+                for _, point in survivors_hcf.iterrows():
+                    all_hcf_points.append({'load': point['load'], 'cycles': point['cycles'], 'series': series_name, 'type': 'survivor'})
+                
+                print(f"Series {series_name}: {len(failures_hcf)} failures, {len(survivors_hcf)} survivors in HCF")
+
                 
                 if not failures_hcf.empty:
                     fig.add_trace(go.Scatter(
@@ -183,6 +194,8 @@ class PlotFatigue:
             
             results.append(series_result)
         
+        print(f"Total HCF points: {len(all_hcf_points)}")
+
         # Get the minimum ND value from all series that have survivors
         min_nd = min((res['ND'] for res in results if res['has_survivors']), default=self.NG/10)
         

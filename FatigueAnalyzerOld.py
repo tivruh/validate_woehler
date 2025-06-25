@@ -834,7 +834,7 @@ def render_main():
         unsafe_allow_html=True
         )
     
-    st.title("Fatigue Analyzer")
+    st.title("Fatigue Analyser")
     
     st.write("")
     
@@ -962,13 +962,13 @@ def render_sidebar(any_survivors, n_runouts):
     st.sidebar.subheader("Probability Bands")
     prob_options = {
         "Pü1/99": (0.01, 0.99),
-        "Pü2.5/97.5": (0.025, 0.975),
+        "Pü5/95": (0.05, 0.95),
         "Pü10/90": (0.10, 0.90)
     }
     selected_prob = st.sidebar.selectbox(
         "Select probability band:", 
         list(prob_options.keys()),
-        index=1,  # Default to Pü2.5/97.5
+        index=1,  # Default to Pü5/95
         help="Select the probability levels for the scatter bands"
     )
     
