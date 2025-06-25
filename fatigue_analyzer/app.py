@@ -1,5 +1,5 @@
 import streamlit as st
-from ui_components import render_main, render_sidebar, apply_custom_styles, optimization_status
+from ui_components import render_main, render_sidebar, apply_custom_styles, optimization_status, y_axis_controls
 from results import display_results
 from plots import PlotFatigue
 from preprocess import load_and_prepare_data
@@ -120,7 +120,13 @@ def main():
     st.write("")
     
     # STEP 5: Handle plot generation requests
-    # Clean separation - plotting only happens when requested
+    # Separation - plotting only happens when requested
+
+    # Initialize session state
+    if 'current_fig' not in st.session_state:
+        st.session_state.current_fig = None
+    if 'y_range' not in st.session_state:
+        st.session_state.y_range = [40, 700]
     
     if generate_full:
         try:
@@ -151,6 +157,9 @@ def main():
             # Display plot and results
             st.plotly_chart(fig, use_container_width=True)
             st.write("")
+
+            y_axis_controls()
+            
             st.subheader("Analysis Results")
             display_results(results, Ch1, any_survivors)
             

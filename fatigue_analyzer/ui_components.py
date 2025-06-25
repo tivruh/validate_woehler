@@ -189,6 +189,34 @@ def get_example_dataset():
     return buffer.getvalue()
 
 
+def y_axis_controls():
+    """Y-axis scaling controls with session state persistence"""
+    # Initialize session state for y-axis range
+    if 'y_min' not in st.session_state:
+        st.session_state.y_min = 40.0
+    if 'y_max' not in st.session_state:
+        st.session_state.y_max = 700.0
+    
+    st.subheader("📊 Plot Controls")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.session_state.y_min = st.number_input(
+            "Y-axis Min", 
+            value=st.session_state.y_min, 
+            step=10.0
+        )
+        
+    with col2:
+        st.session_state.y_max = st.number_input(
+            "Y-axis Max", 
+            value=st.session_state.y_max, 
+            step=100.0
+        )
+    
+    return st.session_state.y_min, st.session_state.y_max
+
+
 def optimization_status(results):
     """Display optimization status for all series in collapsible section"""
     with st.expander("⚙ Optimization Status", expanded=False):
