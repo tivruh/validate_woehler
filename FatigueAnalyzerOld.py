@@ -1308,7 +1308,7 @@ def apply_custom_styles():
         }
         .logo-container img {
             width: 250px;
-        }
+        } 
 
         .download-button {
             display: flex;

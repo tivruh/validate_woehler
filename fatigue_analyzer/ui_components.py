@@ -54,7 +54,7 @@ def render_main():
     #     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     # )
 
-    print("Debug: Before file processing")  # Debug print
+    print("\nDebug: Before file processing")  # Debug print
 
     if uploaded_file:
         xls = pd.ExcelFile(uploaded_file)
