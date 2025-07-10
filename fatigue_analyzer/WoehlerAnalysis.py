@@ -55,8 +55,11 @@ class WoehlerAnalysisApp(SMatApp):
                 result = load_and_prepare_data(series_data[series_name])
                 if result:
                     fatigue_data, ng, sd_bounds, df_prepared = result
-                    selected_data[series_name] = {'data': df_prepared}
-                    detected_ngs.append(ng)
+                    if fatigue_data is not None and ng is not None and df_prepared is not None:
+                        selected_data[series_name] = {'data': df_prepared}
+                        detected_ngs.append(ng)
+                    else:
+                        self.log.error(f"Failed to process {series_name}: returned None values")
         
         # STEP 3: Get UI parameters (like original)
         N_LCF, Ch1, load_type, curve_type, (lower_prob, upper_prob) = render_sidebar(any_survivors, n_runouts)

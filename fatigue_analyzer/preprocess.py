@@ -43,4 +43,4 @@ def load_and_prepare_data(df_input):
     except Exception as e:
         print(f"Error loading data: {e}")
         traceback.print_exc()
-        return None, None, None
+        return None, None, None, None
