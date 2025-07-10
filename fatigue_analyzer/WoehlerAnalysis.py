@@ -35,68 +35,52 @@ class WoehlerAnalysisApp(SMatApp):
     def build_gui(self):
         """ Build the graphical user interface of the actual app """
         
-        # Apply CSS styling first
         apply_custom_styles()
         
         # STEP 1: Handle file upload and series selection
         uploaded_file, series_data, selected_series = render_main()
         
-        # Exit early if no file uploaded
         if not uploaded_file or not series_data or not selected_series:
             st.info("Please upload an Excel file to start the analysis.")
             return
         
-        # STEP 2: Sidebar configuration  
-        with st.sidebar:
-            sidebar_results = render_sidebar(series_data, selected_series)
-            
-        # Unpack tuple into dictionary
-        ng, cycles_unit, y_axis, curve_type, prob_bounds = sidebar_results
-        analysis_settings = {
-            'ng': ng,
-            'cycles_unit': cycles_unit, 
-            'y_axis': y_axis,
-            'curve_type': curve_type,
-            'prob_bounds': prob_bounds,
-            'n_lcf': 10000  # Add default value if needed
-        }
-
-        # STEP 3: Process data for selected series
-        processed_data = {}
-        all_series_valid = True
+        # STEP 2: Process data (like original app does)
+        selected_data = {}
+        detected_ngs = []
+        any_survivors = False
+        n_runouts = {}
         
         for series_name in selected_series:
             if series_name in series_data:
-                self.log.info(f"Processing series: {series_name}")
-                result = load_and_prepare_data(
-                    series_data[series_name]
-                    # analysis_settings['ng'], 
-                    # analysis_settings.get('n_lcf', 10000)
-                )
-                
+                result = load_and_prepare_data(series_data[series_name])
                 if result:
-                    processed_data[series_name] = result
-                else:
-                    all_series_valid = False
-                    st.error(f"Failed to process data for series: {series_name}")
+                    fatigue_data, ng, sd_bounds, df_prepared = result
+                    selected_data[series_name] = {'data': df_prepared}
+                    detected_ngs.append(ng)
         
-        if not all_series_valid or not processed_data:
-            st.error("Some series could not be processed. Please check your data format.")
-            return
-            
-        # STEP 4: Run analysis and display results
-        st.subheader("Analysis Results")
+        # STEP 3: Get UI parameters (like original)
+        N_LCF, Ch1, load_type, curve_type, (lower_prob, upper_prob) = render_sidebar(any_survivors, n_runouts)
         
-        # Display optimization status
-        optimization_status()
+        # STEP 4: Create buttons and wait for clicks (like original)
+        NG = max(detected_ngs) if detected_ngs else 5000000
+        plotter = PlotFatigue(NG, Ch1, load_type, lower_prob, upper_prob, N_LCF)
         
-        # Y-axis controls
-        y_axis_controls()
+        col1, col2 = st.columns(2)
+        with col1:
+            generate_full = st.button("Generate SN Curve")
+        with col2:
+            generate_endurance = st.button("Compare Endurance Limits")
         
-        # Run analysis and display results
-        display_results(processed_data, analysis_settings)
-        
-        self.log.info("Analysis completed successfully")
+        # STEP 5: Handle button clicks (like original)
+        if generate_endurance:
+            try:
+                fig, results = plotter.create_endurance_comparison(selected_data)
+                optimization_status(results)  # Now we have results!
+                st.plotly_chart(fig, use_container_width=True)
+                y_axis_controls()
+                display_results(results, Ch1, any_survivors)
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
 
 if __name__ == '__main__':
     # st.set_page_config(page_title="Fatigue Analyser", layout="wide")
