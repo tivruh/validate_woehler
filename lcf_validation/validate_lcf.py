@@ -56,7 +56,7 @@ def load_single_dataset(file_path, sheet_name="Treppe Hilfe"):
         return None
 
 
-# %% Block 2: Elementary Analysis Function
+# %% Block 2A: Elementary Analysis Function
 
 def run_elementary_analysis(df_pylife, dataset_name):
     """
@@ -104,6 +104,81 @@ def run_elementary_analysis(df_pylife, dataset_name):
             'SD': None,
             'TN': None,
             'TS': None,
+            'status': f'Error: {str(e)}',
+            'timestamp': datetime.now().strftime("%Y%m%d_%H%M%S")
+        }
+
+
+# %% Block 2B: MaxLikeFull with Fixed SD/TS for LCF Data
+def run_maxlikefull_lcf_analysis(df_pylife, dataset_name):
+    """
+    Run PyLife MaxLikeFull analysis with fixed SD and TS for LCF-only datasets
+    
+    Args:
+        df_pylife: DataFrame with columns [load, cycles, censor]
+        dataset_name: Name of the dataset for identification
+    
+    Returns:
+        Dictionary with results
+    """
+    try:
+        # Convert to PyLife FatigueData format
+        df_analysis = df_pylife.copy()
+        df_analysis['fracture'] = df_analysis['censor'] == 1
+        
+        # Create FatigueData object
+        fatigue_data = df_analysis.fatigue_data
+        
+        # Estimate reasonable fixed parameters for LCF data
+        min_load = df_analysis['load'].min()
+        max_load = df_analysis['load'].max()
+        
+        # For LCF data, set SD well below minimum load (no infinite life expected)
+        fixed_sd = min_load * 0.5  # Conservative estimate
+        
+        # Set reasonable TS for LCF (typical scatter factor)
+        fixed_ts = 1.3  # Typical engineering value for LCF
+        
+        # Define fixed parameters - let k_1, ND, TN be optimized
+        fixed_parameters = {
+            'SD': fixed_sd,
+            'TS': fixed_ts
+        }
+        
+        print(f"Fixed parameters: SD={fixed_sd:.1f}, TS={fixed_ts}")
+        
+        # Run MaxLikeFull analysis with fixed parameters
+        analyzer = woehler.MaxLikeFull(fatigue_data)
+        result = analyzer.analyze(fixed_parameters=fixed_parameters)
+        
+        # Extract results
+        results_dict = {
+            'dataset_name': dataset_name,
+            'method': 'MaxLikeFull_LCF',
+            'k_1': result.k_1,
+            'ND': result.ND,
+            'SD': result.SD,  # Will be the fixed value
+            'TN': result.TN,
+            'TS': result.TS,  # Will be the fixed value
+            'fixed_SD': fixed_sd,
+            'fixed_TS': fixed_ts,
+            'status': 'Success',
+            'timestamp': datetime.now().strftime("%Y%m%d_%H%M%S")
+        }
+        
+        return results_dict
+        
+    except Exception as e:
+        return {
+            'dataset_name': dataset_name,
+            'method': 'MaxLikeFull_LCF',
+            'k_1': None,
+            'ND': None,
+            'SD': None,
+            'TN': None,
+            'TS': None,
+            'fixed_SD': None,
+            'fixed_TS': None,
             'status': f'Error: {str(e)}',
             'timestamp': datetime.now().strftime("%Y%m%d_%H%M%S")
         }
@@ -216,6 +291,51 @@ def process_lcf_directory(data_directory="LCF Data", sheet_name="Treppe Hilfe", 
     print(f"Results saved to: {output_file}")
 
 
+# %% Updated Batch Processing with Both Methods
+def process_lcf_directory_both_methods(data_directory="LCF Data", sheet_name="Treppe Hilfe", output_file="LCF_Validation_Results_Both.xlsx"):
+    """
+    Batch process all Excel files using both Elementary and MaxLikeFull methods
+    """
+    print(f"=== Batch Processing LCF Validation (Both Methods) from '{data_directory}' ===")
+    
+    if not Path(data_directory).exists():
+        print(f"❌ Directory '{data_directory}' not found!")
+        return
+    
+    excel_files = list(Path(data_directory).glob("*.xlsx")) + list(Path(data_directory).glob("*.xls"))
+    excel_files = [f for f in excel_files if not f.name.startswith('~$')]
+    
+    print(f"Found {len(excel_files)} Excel files")
+    
+    for file_path in excel_files:
+        print(f"\n--- Processing {file_path.name} ---")
+        
+        try:
+            dataset_name = file_path.stem
+            df_data = load_single_dataset(file_path, sheet_name)
+            
+            if df_data is not None and len(df_data) > 0:
+                # Run Elementary method
+                elementary_results = run_elementary_analysis(df_data, dataset_name)
+                elementary_results['method'] = 'Elementary'  # Add method identifier
+                
+                # Run MaxLikeFull method  
+                maxlike_results = run_maxlikefull_lcf_analysis(df_data, dataset_name)
+                maxlike_results['method'] = 'MaxLikeFull_LCF'  # Add method identifier
+                
+                # Save both results
+                save_results_to_excel(elementary_results, output_file)
+                save_results_to_excel(maxlike_results, output_file)
+                
+                print(f"✅ Elementary: k_1={elementary_results.get('k_1', 'N/A'):.2f}, ND={elementary_results.get('ND', 'N/A')}")
+                print(f"✅ MaxLike: k_1={maxlike_results.get('k_1', 'N/A'):.2f}, ND={maxlike_results.get('ND', 'N/A')}")
+                
+        except Exception as e:
+            print(f"❌ Error processing {file_path.name}: {str(e)}")
+    
+    print(f"\n=== Batch Processing Complete ===")
+
+
 # %% Test single data loading with specific file
 dataset_name = "5_Protokoll_EBlech_Schaeffler1_gekerbtR1_Voestalpine_MF"
 test_file = Path(lcf_data_dir) / f"{dataset_name}.xlsx"
@@ -226,15 +346,25 @@ df_test = load_single_dataset(test_file, sheet_name)
 print("\nDataFrame:")
 print(df_test)
 
-# %% Test Elementary Analysis
-results = run_elementary_analysis(df_test, dataset_name)
-print("Elementary Analysis Results:")
-print(results)
+# # %% Test Elementary Analysis
+# results = run_elementary_analysis(df_test, dataset_name)
+# print("Elementary Analysis Results:")
+# print(results)
+
+# %% Test MaxLikeFull LCF Analysis
+results_maxlike = run_maxlikefull_lcf_analysis(df_test, dataset_name)
+print("MaxLikeFull LCF Analysis Results:")
+print(results_maxlike)
+
 
 # %% Test Save Function
-save_results_to_excel(results, "LCF_Validation_Results.xlsx")
+save_results_to_excel(results_maxlike, "LCF_Validation_Results.xlsx")
 
 
 # %% Run Batch Processing
 process_lcf_directory("LCF Data", "Treppe Hilfe", "LCF_Validation_Results.xlsx")
+
+
+# %% Run Both Methods Batch Processing
+process_lcf_directory_both_methods("LCF Data", "Treppe Hilfe", "LCF_Validation_Results_Both.xlsx")
 # %%
