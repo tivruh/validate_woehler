@@ -48,8 +48,19 @@ class WoehlerAnalysisApp(SMatApp):
         
         # STEP 2: Sidebar configuration  
         with st.sidebar:
-            analysis_settings = render_sidebar(series_data, selected_series)
+            sidebar_results = render_sidebar(series_data, selected_series)
             
+        # Unpack tuple into dictionary
+        ng, cycles_unit, y_axis, curve_type, prob_bounds = sidebar_results
+        analysis_settings = {
+            'ng': ng,
+            'cycles_unit': cycles_unit, 
+            'y_axis': y_axis,
+            'curve_type': curve_type,
+            'prob_bounds': prob_bounds,
+            'n_lcf': 10000  # Add default value if needed
+        }
+
         # STEP 3: Process data for selected series
         processed_data = {}
         all_series_valid = True
@@ -58,9 +69,9 @@ class WoehlerAnalysisApp(SMatApp):
             if series_name in series_data:
                 self.log.info(f"Processing series: {series_name}")
                 result = load_and_prepare_data(
-                    series_data[series_name], 
-                    analysis_settings['ng'], 
-                    analysis_settings.get('n_lcf', 10000)
+                    series_data[series_name]
+                    # analysis_settings['ng'], 
+                    # analysis_settings.get('n_lcf', 10000)
                 )
                 
                 if result:
@@ -88,6 +99,6 @@ class WoehlerAnalysisApp(SMatApp):
         self.log.info("Analysis completed successfully")
 
 if __name__ == '__main__':
-    st.set_page_config(page_title="Fatigue Analyser", layout="wide")
+    # st.set_page_config(page_title="Fatigue Analyser", layout="wide")
     app = WoehlerAnalysisApp()
     app.build_gui()

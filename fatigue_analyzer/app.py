@@ -22,9 +22,8 @@ def main():
         st.info("Please upload an Excel file to start the analysis.")
         return
     
-    # STEP 2: Process all data once - centralized data processing
-    # This eliminates duplicate processing and provides consistent results
-    print("Debug: Starting centralized data processing...")
+    # STEP 2: Process all data
+    print("Debug: Starting data processing...")
     
     # Initialize containers for processed results
     selected_data = {name: series_data[name] for name in selected_series}
