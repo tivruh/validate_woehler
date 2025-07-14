@@ -44,24 +44,38 @@ class WoehlerAnalysisApp(SMatApp):
             st.info("Please upload an Excel file to start the analysis.")
             return
         
-        # STEP 2: Process data (like original app does)
+        # STEP 2: Process data (follow app.py)
         selected_data = {}
         detected_ngs = []
         any_survivors = False
         n_runouts = {}
-        
+
+        print("\nDebug: Processing selected series...")
         for series_name in selected_series:
             if series_name in series_data:
-                result = load_and_prepare_data(series_data[series_name])
-                if result:
-                    fatigue_data, ng, sd_bounds, df_prepared = result
-                    if fatigue_data is not None and ng is not None and df_prepared is not None:
-                        selected_data[series_name] = {'data': df_prepared}
-                        detected_ngs.append(ng)
-                    else:
-                        self.log.error(f"Failed to process {series_name}: returned None values")
+                series_info = series_data[series_name]
+                df = series_info['data']
+                print(f"Debug: Processing {series_name}, type: {type(df)}")
+                
+                # Store DataFrame directly (like original)
+                selected_data[series_name] = {'data': df}
+                
+                # Auto-detect NG from censor column
+                survivors = df[df['censor'] == 0] if 'censor' in df.columns else pd.DataFrame()
+                if not survivors.empty:
+                    ng_raw = int(survivors['cycles'].max())
+                    ng = (ng_raw // 1000) * 1000
+                    detected_ngs.append(ng)
+                    any_survivors = True
+                    print(f"Debug: {series_name} NG detected: {ng}")
+                else:
+                    ng = 5000000  # default
+                    detected_ngs.append(ng)
+                    print(f"Debug: {series_name} using default NG: {ng}")
+
+        print(f"Debug: detected_ngs = {detected_ngs}")
         
-        # STEP 3: Get UI parameters (like original)
+        # STEP 3: Get UI parameters
         N_LCF, Ch1, load_type, curve_type, (lower_prob, upper_prob) = render_sidebar(any_survivors, n_runouts)
         
         # STEP 4: Create buttons and wait for clicks (like original)
