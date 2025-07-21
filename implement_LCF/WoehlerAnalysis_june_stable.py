@@ -83,6 +83,7 @@ class FatigueSolver:
             PÜ_lower = FatigueSolver.scatter(lower_prob, PÜ50, slog)
             PÜ_upper = FatigueSolver.scatter(upper_prob, PÜ50, slog)
             
+            # !TODO change these from int to float .1f 
             return {
                 f'PÜ{int(lower_prob*100)}': round(PÜ_lower, 2),
                 'PÜ50': round(PÜ50, 2),
@@ -516,6 +517,7 @@ class FatigueAnalyzer:
                     )
                     
                     for band_type, prob_value in [('lower', self.lower_prob), ('upper', self.upper_prob)]:
+                        # !TODO change these from int to float .1f
                         prob_key = f'PÜ{int(prob_value*100)}'
                         stress_value = survival_probs[prob_key]
                         
@@ -639,6 +641,7 @@ class FatigueAnalyzer:
                 # Add probability bands if enabled
                 if survival_probs and results.get('show_prob_lines', False):
                     for band_type, prob_value in [('lower', self.lower_prob), ('upper', self.upper_prob)]:
+                        # !TODO change these from int to float .1f
                         prob_key = f'PÜ{int(prob_value*100)}'
                         stress_value = survival_probs[prob_key]
                         
@@ -652,7 +655,9 @@ class FatigueAnalyzer:
                             hoverlabel=dict(font=dict(color=color)),
                             showlegend=False
                         ))
-                        
+            
+            # elif curve_type == 'LCF':
+                                  
             elif curve_type == 'Full':
                 # Calculate starting point for Pü50 curve
                 min_cycles = df['cycles'].min()
@@ -673,6 +678,7 @@ class FatigueAnalyzer:
                 # Add probability bands if enabled
                 if survival_probs and results.get('show_prob_lines', False):
                     for band_type, prob_value in [('lower', self.lower_prob), ('upper', self.upper_prob)]:
+                        # !TODO change these from int to float .1f
                         prob_key = f'PÜ{int(prob_value*100)}'
                         stress_value = survival_probs[prob_key]
                         
@@ -688,9 +694,7 @@ class FatigueAnalyzer:
                             hovertemplate=f'<b>{series_name}</b><br>{prob_key}: <b>%{{y:.2f}}</b><extra></extra>',
                             hoverlabel=dict(font=dict(color=color)),
                             showlegend=False
-                        ))
-    
-    
+                        ))    
     
     def _format_plot(self, fig, any_survivors, ranges, endurance_view=False):
         aspect_ratio = 1.3
@@ -932,50 +936,50 @@ def render_main():
 
 
 
-def render_sidebar(any_survivors, n_runouts):
-    st.sidebar.title("Input Parameters")
+# def render_sidebar(any_survivors, n_runouts):
+#     st.sidebar.title("Input Parameters")
     
-    default_n_runout = max(n_runouts.values()) if n_runouts else 10000000
-    NG = st.sidebar.number_input(
-        "Cycles to Runout:", value=int(default_n_runout), min_value=100000, step=100000)
+#     default_n_runout = max(n_runouts.values()) if n_runouts else 10000000
+#     NG = st.sidebar.number_input(
+#         "Cycles to Runout:", value=int(default_n_runout), min_value=100000, step=100000)
     
-    N_LCF = st.sidebar.number_input(
-        "Pivot point in LCF:", value=10000, min_value=1000, step=1000)
+#     N_LCF = st.sidebar.number_input(
+#         "Pivot point in LCF:", value=10000, min_value=1000, step=1000)
     
-    curve_options = ["Full", "LCF", "HCF"] if any_survivors else ["LCF"]
-    print(f"Debug: Curve options: {curve_options}")
+#     curve_options = ["Full", "LCF", "HCF"] if any_survivors else ["LCF"]
+#     print(f"Debug: Curve options: {curve_options}")
     
-    # curve_type = st.sidebar.selectbox("Curve type:", curve_options)
+#     # curve_type = st.sidebar.selectbox("Curve type:", curve_options)
     
-    curve_type = "Full"
+#     curve_type = "Full"
     
-    st.write("")
+#     st.write("")
     
-    st.sidebar.subheader("Axis labels")
-    load_type = st.sidebar.selectbox("Load type:", ["Amplitude", "Lower load", "Upper load", "Double amplitude"])
-    Ch1 = st.sidebar.selectbox("Unit:", ["N", "mm", "Nm", "MPa", "°"])
+#     st.sidebar.subheader("Axis labels")
+#     load_type = st.sidebar.selectbox("Load type:", ["Amplitude", "Lower load", "Upper load", "Double amplitude"])
+#     Ch1 = st.sidebar.selectbox("Unit:", ["N", "mm", "Nm", "MPa", "°"])
 
     
-    st.write("")
+#     st.write("")
     
-    # probability band configuration
-    st.sidebar.subheader("Probability Bands")
-    prob_options = {
-        "Pü1/99": (0.01, 0.99),
-        "Pü5/95": (0.05, 0.95),
-        "Pü10/90": (0.10, 0.90)
-    }
-    selected_prob = st.sidebar.selectbox(
-        "Select probability band:", 
-        list(prob_options.keys()),
-        index=1,  # Default to Pü5/95
-        help="Select the probability levels for the scatter bands"
-    )
+#     # probability band configuration
+#     st.sidebar.subheader("Probability Bands")
+#     prob_options = {
+#         "Pü1/99": (0.01, 0.99),
+#         "Pü5/95": (0.05, 0.95),
+#         "Pü10/90": (0.10, 0.90)
+#     }
+#     selected_prob = st.sidebar.selectbox(
+#         "Select probability band:", 
+#         list(prob_options.keys()),
+#         index=1,  # Default to Pü5/95
+#         help="Select the probability levels for the scatter bands"
+#     )
     
-    # Get the selected probability values
-    lower_prob, upper_prob = prob_options[selected_prob]
+#     # Get the selected probability values
+#     lower_prob, upper_prob = prob_options[selected_prob]
     
-    return N_LCF, NG, Ch1, load_type, curve_type, (lower_prob, upper_prob)
+#     return N_LCF, NG, Ch1, load_type, curve_type, (lower_prob, upper_prob)
 
 
 
@@ -1096,9 +1100,9 @@ def display_results(results, Ch1, any_survivors):
         # Update abbreviation meanings to include dynamic probability values
         st.markdown(f"""
         **Abbreviations:**
-        - {lower_col}: Probability of Survival at {int(lower_prob*100)}%
+        - {lower_col}: Probability of Survival at {lower_prob*100:.1f}%
         - PÜ50: Probability of Survival at 50%
-        - {upper_col}: Probability of Survival at {int(upper_prob*100)}%
+        - {upper_col}: Probability of Survival at {upper_prob*100:.1f}%
         - slog: Scatter of stress in log / Streuung der Spannung in log
         """)
         # - k: Slope of the S-N curve / Neigung der Wöhlerlinie
@@ -1382,7 +1386,48 @@ def main():
         #     for series, runout in n_runouts.items():
         #         st.write(f"{series}: {runout:,} cycles")        
         
-        N_LCF, NG, Ch1, load_type, curve_type, (lower_prob, upper_prob) = render_sidebar(any_survivors, n_runouts)
+        # === MOVED FROM SIDEBAR TO MAIN AREA ===
+
+        # Moving sidebar controls to main for SMatApp compatibility
+        # render_sidebar() function logic moved inline below:
+
+        st.subheader("Input Parameters")
+
+        default_n_runout = max(n_runouts.values()) if n_runouts else 10000000
+        NG = st.number_input(
+            "Cycles to Runout:", value=int(default_n_runout), min_value=100000, step=100000)
+
+        N_LCF = st.number_input(
+            "Pivot point in LCF:", value=10000, min_value=1000, step=1000)
+
+        curve_options = ["Full", "LCF", "HCF"] if any_survivors else ["LCF"]
+        print(f"Debug: Curve options: {curve_options}")
+
+        # curve_type = st.selectbox("Curve type:", curve_options)  # ← UNCOMMENTED FOR LATER
+        curve_type = "Full"  # ← STILL HARDCODED FOR NOW
+
+        st.write("")
+
+        st.subheader("Axis labels")
+        load_type = st.selectbox("Load type:", ["Amplitude", "Lower load", "Upper load", "Double amplitude"])
+        Ch1 = st.selectbox("Unit:", ["N", "mm", "Nm", "MPa", "°"])
+
+        st.write("")
+
+        # probability band configuration
+        st.subheader("Probability bands")
+        prob_options = {
+            "P2.5/97.5": (0.025, 0.975),
+            "P5/95": (0.05, 0.95),
+            "P10/90": (0.1, 0.9)
+        }
+        prob_selection = st.selectbox("Probability levels:", list(prob_options.keys()))
+        lower_prob, upper_prob = prob_options[prob_selection]
+
+        st.write("")
+        st.write("")
+        # === END OF MOVED SIDEBAR CONTROLS ===
+        
         analyzer = FatigueAnalyzer(N_LCF, NG, Ch1, load_type, prob_levels=(lower_prob, upper_prob))
         
         st.write("")
